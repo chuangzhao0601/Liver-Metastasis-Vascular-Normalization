@@ -1,0 +1,33 @@
+---
+title: "Pan EC"
+author: "Lin Tian"
+date: "2025-03-14"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+## Load Data
+
+```{r}
+library(Seurat)
+library(RColorBrewer)
+library(scCustomize)
+library(Nebulosa)
+panVEC <- readRDS("~/panVEC.rds")
+panVEC@meta.data
+
+p1 <- DimPlot(panVEC, group.by = "Anno_Tier2", cols=c("#f0027f", "#386cb0", "#33a02c", "#fdbf6f", "#737373"), raster=TRUE)
+
+jpeg("umap.jpeg",height = 5000,width = 7500)
+p1
+dev.off()
+
+FeaturePlot(panVEC, features = "ESM1", order = TRUE, raster=TRUE, cols = BlueAndRed())
+
+jpeg("umap.jpeg",height = 5000,width = 7500)
+p1 <- FeaturePlot_scCustom(seurat_object = panVEC, features = "VEGFA", order = T)
+p1
+dev.off()
+```
+

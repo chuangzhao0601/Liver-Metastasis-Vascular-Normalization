@@ -1,0 +1,118 @@
+---
+title: "Lyve1_OE_Data_Process"
+author: "Lin Tian"
+date: "2026-03-17"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+## Set working directory
+
+```{r}
+setwd("~/Lyve1_OE")
+```
+
+## TPM
+
+```{r}
+sample_vector <- list.files("RSEM/") ## Modify DIR
+template.data <- read.delim(paste0("RSEM/", sample_vector[1]), row.names=1)
+
+Lyve1OE.TPM.ensembl <- matrix(NA, nrow=nrow(template.data), ncol=length(sample_vector), dimnames=list(rownames(template.data), sub(".genes.results", "", sample_vector)))
+
+for(i in 1:length(sample_vector)) {
+  file_i <- read.delim(paste0("RSEM/", sample_vector[i]), row.names=1)
+  print(all.equal(rownames(template.data), rownames(file_i)))
+  if (all.equal(rownames(template.data), rownames(file_i))) {
+    Lyve1OE.TPM.ensembl[, sub(".genes.results", "", sample_vector[i])] <- file_i[, "TPM"]
+  }
+}
+
+rownames(Lyve1OE.TPM.ensembl) <- sub("\\..+", "", rownames(Lyve1OE.TPM.ensembl))
+```
+
+## Ensembl ID to Gene Symbol
+
+```{r}
+ID_convert <- read.table("Ensembl_Gene_Converter.txt", header=TRUE, stringsAsFactors=FALSE)
+
+Lyve1_Flag_WPRE <- Lyve1OE.TPM.ensembl[55386, ]
+Lyve1OE.TPM.ensembl <- Lyve1OE.TPM.ensembl[-55386, ]
+
+sample.probe.ms <- rownames(Lyve1OE.TPM.ensembl)[rownames(Lyve1OE.TPM.ensembl) %in% ID_convert$ensembl_ID]
+ID_convert <- ID_convert[ID_convert$ensembl_ID %in% sample.probe.ms, ]
+genenames.ms <- unique(ID_convert$mgi_symbol[ID_convert$ensembl_ID %in% sample.probe.ms])
+
+
+Lyve1OE.TPM.gene <- matrix(NA, nrow=length(genenames.ms), ncol=ncol(Lyve1OE.TPM.ensembl), dimnames = list(genenames.ms, colnames(Lyve1OE.TPM.ensembl)))
+
+
+for(g in genenames.ms) {
+  probes <- as.character(ID_convert$ensembl_ID[ID_convert$mgi_symbol==g])
+  if(length(probes)==1) {
+    Lyve1OE.TPM.gene[g, ] <- Lyve1OE.TPM.ensembl[probes, ]
+  }
+  else{
+    Lyve1OE.TPM.gene[g, ] <- apply(Lyve1OE.TPM.ensembl[probes, ], 2, max)
+  }
+}
+
+Lyve1OE.TPM.gene <- rbind(Lyve1OE.TPM.gene, Lyve1_Flag_WPRE)
+Lyve1OE.ann <- data.frame(Tissue=c(rep("LvMet", 8), rep("Normal", 6)), Lyve1=c(rep("CTRL", 4), rep("OE", 4), rep("CTRL", 3), rep("OE", 3)))
+Lyve1OE.ann$Lyve1 <- as.factor(Lyve1OE.ann$Lyve1)
+
+```
+
+## DEseq
+
+```{r}
+library(DESeq2)
+
+Lyve1OE.dds <- DESeqDataSetFromMatrix(matrix(round(Lyve1OE.TPM.gene), nrow = nrow(Lyve1OE.TPM.gene)), colData=Lyve1OE.ann, design= ~ Tissue)
+Lyve1OE.dds <- DESeq(Lyve1OE.dds)
+
+# sizeFactors(Lyve1OE.dds)
+# colSums(counts(Lyve1OE.dds))
+# plot(sizeFactors(Lyve1OE.dds), colSums(counts(Lyve1OE.dds)))
+# abline(lm(colSums(counts(Lyve1OE.dds)) ~ sizeFactors(Lyve1OE.dds)+0))
+
+Lyve1OE.rld <- rlog(Lyve1OE.dds) ## take long time if sample number > 50
+
+Lyve1OE_rld_norm <- assay(Lyve1OE.rld)
+rownames(Lyve1OE_rld_norm) <- rownames(Lyve1OE.TPM.gene)
+colnames(Lyve1OE_rld_norm) <- colnames(Lyve1OE.TPM.gene)
+
+Lyve1OE.pca <- plotPCA(Lyve1OE.rld, intgroup=c("Tissue", "Lyve1"), returnData=TRUE)
+
+Lyve1OE.ann.sub$PC1 <- Lyve1OE.htseq.pca$PC1
+Lyve1OE.ann.sub$PC2 <- Lyve1OE.htseq.pca$PC2
+
+percentVar <- round(100 * attr(Lyve1OE.pca, "percentVar"))
+makeLab <- function(x,pc) paste0("PC",pc,": ",x,"% variance")
+p1 <- ggplot() + geom_point(data=Lyve1OE.pca, aes(x=PC1, y=PC2, col=cell_population_id), size=3) + scale_color_manual(values=c("#ff7f00", "#6a3d9a")) + xlab(makeLab(percentVar[1],1)) + ylab(makeLab(percentVar[2],2))
+p1 <- p1 + theme_bw() + theme(panel.grid.major=element_blank(), panel.grid.minor=element_blank(), panel.border=element_blank(), axis.line.x=element_line(colour="black"), axis.line.y=element_line(colour="black")) + coord_fixed(ratio=1.15)
+ggsave("pca.pdf", p1, width=6.28, height=6.28, units="in", useDingbats=FALSE)
+## save file
+
+save(Lyve1OE.ann, Lyve1OE.TPM.gene, Lyve1OE.rld, file="Lyve1OE_TPM.RData")
+```
+
+## Heatmap
+
+```{r}
+library(DESeq2)
+library(pheatmap)
+library(RColorBrewer)
+
+load("~/Lyve1_OE/Lyve1OE_TPM.RData")
+
+GOIs <- c("Lyve1_Flag_WPRE", "Lyve1", "Clec4g", "F8", "Stab1", "Stab2", "Esm1", "Itga6", "Col4a1", "Col4a2", "Sparc", "Col15a1", "Lamb1", "Lamc1", "Serpinh1", "Nid2", "Ly6c1", "Fabp5", "Hmgb2", "Nos3")
+
+pheatmap(log2(t(Lyve1OE.TPM.gene[GOIs, c(9:14, 1:8)])+1), cluster_rows=FALSE, cluster_cols=FALSE, scale="column", color = c(rep("#B35806", 20), colorRampPalette(brewer.pal(n = 7, name = "PuOr"))(100), rep("#542788", 20)))
+
+t.test(log2(Lyve1OE.TPM.gene["Nos3", 9:11]+1), log2(Lyve1OE.TPM.gene["Nos3", 12:14]+1))
+
+t.test(log2(Lyve1OE.TPM.gene["Nos3", 1:4]+1), log2(Lyve1OE.TPM.gene["Nos3", 5:8]+1))
+```
+

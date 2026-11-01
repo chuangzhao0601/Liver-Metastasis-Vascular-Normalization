@@ -1,0 +1,448 @@
+---
+title: "Fig 6"
+author: "Lin Tian"
+date: "3/23/2022"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+## Set working directory and load data
+
+```{r}
+setwd("~/Fig6")
+load("~/Fig6/gse51401.RData")
+```
+
+## LYVE1 Plot
+
+
+```{r}
+library(ggplot2)
+source("summarySE.R")
+
+CD105_Tumor.ann <- subset(gse51401.ann, Marker == "CD105" & Type == "TEC")
+CD105_Normal.ann <- subset(gse51401.ann, Marker == "CD105" & Type == "NEC")
+
+CD31_Tumor.ann <- subset(gse51401.ann, Marker == "CD31" & Type == "TEC")
+CD31_Normal.ann <- subset(gse51401.ann, Marker == "CD31" & Type == "NEC")
+
+## F8
+CD31_Tumor.ann$F8 <- gse51401.exp.loess["F8", rownames(CD31_Tumor.ann)]
+CD31_Normal.ann$F8 <- gse51401.exp.loess["F8", rownames(CD31_Normal.ann)]
+boxplot(CD31_Tumor.ann$F8, CD31_Normal.ann$F8)
+CD31.EC.ann <- rbind(CD31_Normal.ann, CD31_Tumor.ann)
+CD31.EC.ann_s <-summarySE(CD31.EC.ann, measurevar="F8", groupvars="Type")
+t.test(F8 ~ Type, data=CD31.EC.ann, paired=TRUE)
+
+CD31_F8_df.p <- ggplot() + geom_point(data=CD31.EC.ann, size=9, alpha=0.8, aes(x=Type, y=F8, colour=Patient, shape=Type)) + scale_fill_manual(values=c("#0a8a4b", "#b2e3f7", "#f6ec13", "#ed1f24", "#3953a4", "#f498c0", "#a53f97", "#af2824", "#d1d3d4", "#231f20", "#69bd45", "#fbb065", "#6479a2", "#925e1c", "#281d7b", "#4c5751")) + geom_line(data=CD31.EC.ann, aes(x=Type, y=F8, colour=Patient, group=Patient)) + scale_colour_manual(values=c("#0a8a4b", "#b2e3f7", "#f6ec13", "#ed1f24", "#3953a4", "#f498c0", "#a53f97", "#af2824", "#d1d3d4", "#231f20", "#69bd45", "#fbb065", "#6479a2", "#925e1c", "#281d7b", "#4c5751")) + geom_errorbar(data=CD31.EC.ann_s, aes(x=Type, y=F8, ymin=F8-se, ymax=F8+se), width=0.32)+ geom_boxplot(data=CD31.EC.ann_s, aes(x=Type, y=F8), width=0.68, fill=NA) + scale_y_continuous(breaks=seq(0, 15, by=3), limits=c(0, 15))+theme_bw()+theme(axis.title.x = element_blank(), panel.grid.major=element_blank(), panel.grid.minor=element_blank(), panel.border=element_blank(), axis.line.x=element_line(colour="black"), axis.line.y=element_line(colour="black"))+coord_fixed(ratio=0.25)
+ggsave("~/CD31_F8_df.pdf", CD31_F8_df.p, width=6.28, height=6.28, units="in", useDingbats=FALSE)
+
+## CLEC4G
+CD31_Tumor.ann$CLEC4G <- gse51401.exp.loess["CLEC4G", rownames(CD31_Tumor.ann)]
+CD31_Normal.ann$CLEC4G <- gse51401.exp.loess["CLEC4G", rownames(CD31_Normal.ann)]
+boxplot(CD31_Tumor.ann$CLEC4G, CD31_Normal.ann$CLEC4G)
+CD31.EC.ann <- rbind(CD31_Normal.ann, CD31_Tumor.ann)
+CD31.EC.ann_s <-summarySE(CD31.EC.ann, measurevar="CLEC4G", groupvars="Type")
+t.test(CLEC4G ~ Type, data=CD31.EC.ann, paired=TRUE)
+
+CD31_CLEC4G_df.p <- ggplot() + geom_point(data=CD31.EC.ann, size=9, alpha=0.8, aes(x=Type, y=CLEC4G, colour=Patient, shape=Type)) + scale_fill_manual(values=c("#0a8a4b", "#b2e3f7", "#f6ec13", "#ed1f24", "#3953a4", "#f498c0", "#a53f97", "#af2824", "#d1d3d4", "#231f20", "#69bd45", "#fbb065", "#6479a2", "#925e1c", "#281d7b", "#4c5751")) + geom_line(data=CD31.EC.ann, aes(x=Type, y=CLEC4G, colour=Patient, group=Patient)) + scale_colour_manual(values=c("#0a8a4b", "#b2e3f7", "#f6ec13", "#ed1f24", "#3953a4", "#f498c0", "#a53f97", "#af2824", "#d1d3d4", "#231f20", "#69bd45", "#fbb065", "#6479a2", "#925e1c", "#281d7b", "#4c5751")) + geom_errorbar(data=CD31.EC.ann_s, aes(x=Type, y=CLEC4G, ymin=CLEC4G-se, ymax=CLEC4G+se), width=0.32)+ geom_boxplot(data=CD31.EC.ann_s, aes(x=Type, y=CLEC4G), width=0.68, fill=NA) + scale_y_continuous(breaks=seq(0, 15, by=3), limits=c(0, 15))+theme_bw()+theme(axis.title.x = element_blank(), panel.grid.major=element_blank(), panel.grid.minor=element_blank(), panel.border=element_blank(), axis.line.x=element_line(colour="black"), axis.line.y=element_line(colour="black"))+coord_fixed(ratio=0.25)
+ggsave("~/CD31_CLEC4G_df.pdf", CD31_CLEC4G_df.p, width=6.28, height=6.28, units="in", useDingbats=FALSE)
+
+## LYVE1
+CD31_Tumor.ann$LYVE1 <- gse51401.exp.loess["LYVE1", rownames(CD31_Tumor.ann)]
+CD31_Normal.ann$LYVE1 <- gse51401.exp.loess["LYVE1", rownames(CD31_Normal.ann)]
+boxplot(CD31_Tumor.ann$LYVE1, CD31_Normal.ann$LYVE1)
+CD31.EC.ann <- rbind(CD31_Normal.ann, CD31_Tumor.ann)
+CD31.EC.ann_s <-summarySE(CD31.EC.ann, measurevar="LYVE1", groupvars="Type")
+t.test(LYVE1 ~ Type, data=CD31.EC.ann, paired=TRUE)
+
+CD31_Lyve1_df.p <- ggplot() + geom_point(data=CD31.EC.ann, size=9, alpha=0.8, aes(x=Type, y=LYVE1, colour=Patient, shape=Type)) + scale_fill_manual(values=c("#0a8a4b", "#b2e3f7", "#f6ec13", "#ed1f24", "#3953a4", "#f498c0", "#a53f97", "#af2824", "#d1d3d4", "#231f20", "#69bd45", "#fbb065", "#6479a2", "#925e1c", "#281d7b", "#4c5751")) + geom_line(data=CD31.EC.ann, aes(x=Type, y=LYVE1, colour=Patient, group=Patient)) + scale_colour_manual(values=c("#0a8a4b", "#b2e3f7", "#f6ec13", "#ed1f24", "#3953a4", "#f498c0", "#a53f97", "#af2824", "#d1d3d4", "#231f20", "#69bd45", "#fbb065", "#6479a2", "#925e1c", "#281d7b", "#4c5751")) + geom_errorbar(data=CD31.EC.ann_s, aes(x=Type, y=LYVE1, ymin=LYVE1-se, ymax=LYVE1+se), width=0.32)+ geom_boxplot(data=CD31.EC.ann_s, aes(x=Type, y=LYVE1), width=0.68, fill=NA) + scale_y_continuous(breaks=seq(0, 15, by=3), limits=c(0, 15))+theme_bw()+theme(axis.title.x = element_blank(), panel.grid.major=element_blank(), panel.grid.minor=element_blank(), panel.border=element_blank(), axis.line.x=element_line(colour="black"), axis.line.y=element_line(colour="black"))+coord_fixed(ratio=0.25)
+ggsave("~/CD31_Lyve1_df.pdf", CD31_Lyve1_df.p, width=6.28, height=6.28, units="in", useDingbats=FALSE)
+
+## STAB1
+CD31_Tumor.ann$STAB1 <- gse51401.exp.loess["STAB1", rownames(CD31_Tumor.ann)]
+CD31_Normal.ann$STAB1 <- gse51401.exp.loess["STAB1", rownames(CD31_Normal.ann)]
+boxplot(CD31_Tumor.ann$STAB1, CD31_Normal.ann$STAB1)
+CD31.EC.ann <- rbind(CD31_Normal.ann, CD31_Tumor.ann)
+CD31.EC.ann_s <-summarySE(CD31.EC.ann, measurevar="STAB1", groupvars="Type")
+t.test(STAB1 ~ Type, data=CD31.EC.ann, paired=TRUE)
+
+CD31_STAB1_df.p <- ggplot() + geom_point(data=CD31.EC.ann, size=9, alpha=0.8, aes(x=Type, y=STAB1, colour=Patient, shape=Type)) + scale_fill_manual(values=c("#0a8a4b", "#b2e3f7", "#f6ec13", "#ed1f24", "#3953a4", "#f498c0", "#a53f97", "#af2824", "#d1d3d4", "#231f20", "#69bd45", "#fbb065", "#6479a2", "#925e1c", "#281d7b", "#4c5751")) + geom_line(data=CD31.EC.ann, aes(x=Type, y=STAB1, colour=Patient, group=Patient)) + scale_colour_manual(values=c("#0a8a4b", "#b2e3f7", "#f6ec13", "#ed1f24", "#3953a4", "#f498c0", "#a53f97", "#af2824", "#d1d3d4", "#231f20", "#69bd45", "#fbb065", "#6479a2", "#925e1c", "#281d7b", "#4c5751")) + geom_errorbar(data=CD31.EC.ann_s, aes(x=Type, y=STAB1, ymin=STAB1-se, ymax=STAB1+se), width=0.32)+ geom_boxplot(data=CD31.EC.ann_s, aes(x=Type, y=STAB1), width=0.68, fill=NA) + scale_y_continuous(breaks=seq(0, 15, by=3), limits=c(0, 15))+theme_bw()+theme(axis.title.x = element_blank(), panel.grid.major=element_blank(), panel.grid.minor=element_blank(), panel.border=element_blank(), axis.line.x=element_line(colour="black"), axis.line.y=element_line(colour="black"))+coord_fixed(ratio=0.25)
+ggsave("~/CD31_STAB1_df.pdf", CD31_STAB1_df.p, width=6.28, height=6.28, units="in", useDingbats=FALSE)
+
+## STAB2
+CD31_Tumor.ann$STAB2 <- gse51401.exp.loess["STAB2", rownames(CD31_Tumor.ann)]
+CD31_Normal.ann$STAB2 <- gse51401.exp.loess["STAB2", rownames(CD31_Normal.ann)]
+boxplot(CD31_Tumor.ann$STAB2, CD31_Normal.ann$STAB2)
+CD31.EC.ann <- rbind(CD31_Normal.ann, CD31_Tumor.ann)
+CD31.EC.ann_s <-summarySE(CD31.EC.ann, measurevar="STAB2", groupvars="Type")
+t.test(STAB2 ~ Type, data=CD31.EC.ann, paired=TRUE)
+
+CD31_STAB2_df.p <- ggplot() + geom_point(data=CD31.EC.ann, size=9, alpha=0.8, aes(x=Type, y=STAB2, colour=Patient, shape=Type)) + scale_fill_manual(values=c("#0a8a4b", "#b2e3f7", "#f6ec13", "#ed1f24", "#3953a4", "#f498c0", "#a53f97", "#af2824", "#d1d3d4", "#231f20", "#69bd45", "#fbb065", "#6479a2", "#925e1c", "#281d7b", "#4c5751")) + geom_line(data=CD31.EC.ann, aes(x=Type, y=STAB2, colour=Patient, group=Patient)) + scale_colour_manual(values=c("#0a8a4b", "#b2e3f7", "#f6ec13", "#ed1f24", "#3953a4", "#f498c0", "#a53f97", "#af2824", "#d1d3d4", "#231f20", "#69bd45", "#fbb065", "#6479a2", "#925e1c", "#281d7b", "#4c5751")) + geom_errorbar(data=CD31.EC.ann_s, aes(x=Type, y=STAB2, ymin=STAB2-se, ymax=STAB2+se), width=0.32)+ geom_boxplot(data=CD31.EC.ann_s, aes(x=Type, y=STAB2), width=0.68, fill=NA) + scale_y_continuous(breaks=seq(0, 15, by=3), limits=c(0, 15))+theme_bw()+theme(axis.title.x = element_blank(), panel.grid.major=element_blank(), panel.grid.minor=element_blank(), panel.border=element_blank(), axis.line.x=element_line(colour="black"), axis.line.y=element_line(colour="black"))+coord_fixed(ratio=0.25)
+ggsave("~/CD31_STAB2_df.pdf", CD31_STAB2_df.p, width=6.28, height=6.28, units="in", useDingbats=FALSE)
+
+## COL15A1
+CD31_Tumor.ann$COL15A1 <- gse51401.exp.loess["COL15A1", rownames(CD31_Tumor.ann)]
+CD31_Normal.ann$COL15A1 <- gse51401.exp.loess["COL15A1", rownames(CD31_Normal.ann)]
+boxplot(CD31_Tumor.ann$COL15A1, CD31_Normal.ann$COL15A1)
+CD31.EC.ann <- rbind(CD31_Normal.ann, CD31_Tumor.ann)
+CD31.EC.ann_s <-summarySE(CD31.EC.ann, measurevar="COL15A1", groupvars="Type")
+t.test(COL15A1 ~ Type, data=CD31.EC.ann, paired=TRUE)
+
+CD31_COL15A1_df.p <- ggplot() + geom_point(data=CD31.EC.ann, size=9, alpha=0.8, aes(x=Type, y=COL15A1, colour=Patient, shape=Type)) + scale_fill_manual(values=c("#0a8a4b", "#b2e3f7", "#f6ec13", "#ed1f24", "#3953a4", "#f498c0", "#a53f97", "#af2824", "#d1d3d4", "#231f20", "#69bd45", "#fbb065", "#6479a2", "#925e1c", "#281d7b", "#4c5751")) + geom_line(data=CD31.EC.ann, aes(x=Type, y=COL15A1, colour=Patient, group=Patient)) + scale_colour_manual(values=c("#0a8a4b", "#b2e3f7", "#f6ec13", "#ed1f24", "#3953a4", "#f498c0", "#a53f97", "#af2824", "#d1d3d4", "#231f20", "#69bd45", "#fbb065", "#6479a2", "#925e1c", "#281d7b", "#4c5751")) + geom_errorbar(data=CD31.EC.ann_s, aes(x=Type, y=COL15A1, ymin=COL15A1-se, ymax=COL15A1+se), width=0.32)+ geom_boxplot(data=CD31.EC.ann_s, aes(x=Type, y=COL15A1), width=0.68, fill=NA) + scale_y_continuous(breaks=seq(0, 15, by=3), limits=c(0, 15))+theme_bw()+theme(axis.title.x = element_blank(), panel.grid.major=element_blank(), panel.grid.minor=element_blank(), panel.border=element_blank(), axis.line.x=element_line(colour="black"), axis.line.y=element_line(colour="black"))+coord_fixed(ratio=0.25)
+ggsave("~/CD31_COL15A1_df.pdf", CD31_COL15A1_df.p, width=6.28, height=6.28, units="in", useDingbats=FALSE)
+
+## COL4A1
+CD31_Tumor.ann$COL4A1 <- gse51401.exp.loess["COL4A1", rownames(CD31_Tumor.ann)]
+CD31_Normal.ann$COL4A1 <- gse51401.exp.loess["COL4A1", rownames(CD31_Normal.ann)]
+boxplot(CD31_Tumor.ann$COL4A1, CD31_Normal.ann$COL4A1)
+CD31.EC.ann <- rbind(CD31_Normal.ann, CD31_Tumor.ann)
+CD31.EC.ann_s <-summarySE(CD31.EC.ann, measurevar="COL4A1", groupvars="Type")
+t.test(COL4A1 ~ Type, data=CD31.EC.ann, paired=TRUE)
+
+CD31_COL4A1_df.p <- ggplot() + geom_point(data=CD31.EC.ann, size=9, alpha=0.8, aes(x=Type, y=COL4A1, colour=Patient, shape=Type)) + scale_fill_manual(values=c("#0a8a4b", "#b2e3f7", "#f6ec13", "#ed1f24", "#3953a4", "#f498c0", "#a53f97", "#af2824", "#d1d3d4", "#231f20", "#69bd45", "#fbb065", "#6479a2", "#925e1c", "#281d7b", "#4c5751")) + geom_line(data=CD31.EC.ann, aes(x=Type, y=COL4A1, colour=Patient, group=Patient)) + scale_colour_manual(values=c("#0a8a4b", "#b2e3f7", "#f6ec13", "#ed1f24", "#3953a4", "#f498c0", "#a53f97", "#af2824", "#d1d3d4", "#231f20", "#69bd45", "#fbb065", "#6479a2", "#925e1c", "#281d7b", "#4c5751")) + geom_errorbar(data=CD31.EC.ann_s, aes(x=Type, y=COL4A1, ymin=COL4A1-se, ymax=COL4A1+se), width=0.32)+ geom_boxplot(data=CD31.EC.ann_s, aes(x=Type, y=COL4A1), width=0.68, fill=NA) + scale_y_continuous(breaks=seq(0, 15, by=3), limits=c(0, 15))+theme_bw()+theme(axis.title.x = element_blank(), panel.grid.major=element_blank(), panel.grid.minor=element_blank(), panel.border=element_blank(), axis.line.x=element_line(colour="black"), axis.line.y=element_line(colour="black"))+coord_fixed(ratio=0.25)
+ggsave("~/CD31_COL4A1_df.pdf", CD31_COL4A1_df.p, width=6.28, height=6.28, units="in", useDingbats=FALSE)
+
+## COL4A2
+CD31_Tumor.ann$COL4A2 <- gse51401.exp.loess["COL4A2", rownames(CD31_Tumor.ann)]
+CD31_Normal.ann$COL4A2 <- gse51401.exp.loess["COL4A2", rownames(CD31_Normal.ann)]
+boxplot(CD31_Tumor.ann$COL4A2, CD31_Normal.ann$COL4A2)
+CD31.EC.ann <- rbind(CD31_Normal.ann, CD31_Tumor.ann)
+CD31.EC.ann_s <-summarySE(CD31.EC.ann, measurevar="COL4A2", groupvars="Type")
+t.test(COL4A2 ~ Type, data=CD31.EC.ann, paired=TRUE)
+
+CD31_COL4A2_df.p <- ggplot() + geom_point(data=CD31.EC.ann, size=9, alpha=0.8, aes(x=Type, y=COL4A2, colour=Patient, shape=Type)) + scale_fill_manual(values=c("#0a8a4b", "#b2e3f7", "#f6ec13", "#ed1f24", "#3953a4", "#f498c0", "#a53f97", "#af2824", "#d1d3d4", "#231f20", "#69bd45", "#fbb065", "#6479a2", "#925e1c", "#281d7b", "#4c5751")) + geom_line(data=CD31.EC.ann, aes(x=Type, y=COL4A2, colour=Patient, group=Patient)) + scale_colour_manual(values=c("#0a8a4b", "#b2e3f7", "#f6ec13", "#ed1f24", "#3953a4", "#f498c0", "#a53f97", "#af2824", "#d1d3d4", "#231f20", "#69bd45", "#fbb065", "#6479a2", "#925e1c", "#281d7b", "#4c5751")) + geom_errorbar(data=CD31.EC.ann_s, aes(x=Type, y=COL4A2, ymin=COL4A2-se, ymax=COL4A2+se), width=0.32)+ geom_boxplot(data=CD31.EC.ann_s, aes(x=Type, y=COL4A2), width=0.68, fill=NA) + scale_y_continuous(breaks=seq(0, 15, by=3), limits=c(0, 15))+theme_bw()+theme(axis.title.x = element_blank(), panel.grid.major=element_blank(), panel.grid.minor=element_blank(), panel.border=element_blank(), axis.line.x=element_line(colour="black"), axis.line.y=element_line(colour="black"))+coord_fixed(ratio=0.25)
+ggsave("~/CD31_COL4A2_df.pdf", CD31_COL4A2_df.p, width=6.28, height=6.28, units="in", useDingbats=FALSE)
+
+## ITGA6
+CD31_Tumor.ann$ITGA6 <- gse51401.exp.loess["ITGA6", rownames(CD31_Tumor.ann)]
+CD31_Normal.ann$ITGA6 <- gse51401.exp.loess["ITGA6", rownames(CD31_Normal.ann)]
+boxplot(CD31_Tumor.ann$ITGA6, CD31_Normal.ann$ITGA6)
+CD31.EC.ann <- rbind(CD31_Normal.ann, CD31_Tumor.ann)
+CD31.EC.ann_s <-summarySE(CD31.EC.ann, measurevar="ITGA6", groupvars="Type")
+t.test(ITGA6 ~ Type, data=CD31.EC.ann, paired=TRUE)
+
+CD31_ITGA6_df.p <- ggplot() + geom_point(data=CD31.EC.ann, size=9, alpha=0.8, aes(x=Type, y=ITGA6, colour=Patient, shape=Type)) + scale_fill_manual(values=c("#0a8a4b", "#b2e3f7", "#f6ec13", "#ed1f24", "#3953a4", "#f498c0", "#a53f97", "#af2824", "#d1d3d4", "#231f20", "#69bd45", "#fbb065", "#6479a2", "#925e1c", "#281d7b", "#4c5751")) + geom_line(data=CD31.EC.ann, aes(x=Type, y=ITGA6, colour=Patient, group=Patient)) + scale_colour_manual(values=c("#0a8a4b", "#b2e3f7", "#f6ec13", "#ed1f24", "#3953a4", "#f498c0", "#a53f97", "#af2824", "#d1d3d4", "#231f20", "#69bd45", "#fbb065", "#6479a2", "#925e1c", "#281d7b", "#4c5751")) + geom_errorbar(data=CD31.EC.ann_s, aes(x=Type, y=ITGA6, ymin=ITGA6-se, ymax=ITGA6+se), width=0.32)+ geom_boxplot(data=CD31.EC.ann_s, aes(x=Type, y=ITGA6), width=0.68, fill=NA) + scale_y_continuous(breaks=seq(0, 15, by=3), limits=c(0, 15))+theme_bw()+theme(axis.title.x = element_blank(), panel.grid.major=element_blank(), panel.grid.minor=element_blank(), panel.border=element_blank(), axis.line.x=element_line(colour="black"), axis.line.y=element_line(colour="black"))+coord_fixed(ratio=0.25)
+ggsave("~/CD31_ITGA6_df.pdf", CD31_ITGA6_df.p, width=6.28, height=6.28, units="in", useDingbats=FALSE)
+
+## SPARC
+CD31_Tumor.ann$SPARC <- gse51401.exp.loess["SPARC", rownames(CD31_Tumor.ann)]
+CD31_Normal.ann$SPARC <- gse51401.exp.loess["SPARC", rownames(CD31_Normal.ann)]
+boxplot(CD31_Tumor.ann$SPARC, CD31_Normal.ann$SPARC)
+CD31.EC.ann <- rbind(CD31_Normal.ann, CD31_Tumor.ann)
+CD31.EC.ann_s <-summarySE(CD31.EC.ann, measurevar="SPARC", groupvars="Type")
+t.test(SPARC ~ Type, data=CD31.EC.ann, paired=TRUE)
+
+CD31_SPARC_df.p <- ggplot() + geom_point(data=CD31.EC.ann, size=9, alpha=0.8, aes(x=Type, y=SPARC, colour=Patient, shape=Type)) + scale_fill_manual(values=c("#0a8a4b", "#b2e3f7", "#f6ec13", "#ed1f24", "#3953a4", "#f498c0", "#a53f97", "#af2824", "#d1d3d4", "#231f20", "#69bd45", "#fbb065", "#6479a2", "#925e1c", "#281d7b", "#4c5751")) + geom_line(data=CD31.EC.ann, aes(x=Type, y=SPARC, colour=Patient, group=Patient)) + scale_colour_manual(values=c("#0a8a4b", "#b2e3f7", "#f6ec13", "#ed1f24", "#3953a4", "#f498c0", "#a53f97", "#af2824", "#d1d3d4", "#231f20", "#69bd45", "#fbb065", "#6479a2", "#925e1c", "#281d7b", "#4c5751")) + geom_errorbar(data=CD31.EC.ann_s, aes(x=Type, y=SPARC, ymin=SPARC-se, ymax=SPARC+se), width=0.32)+ geom_boxplot(data=CD31.EC.ann_s, aes(x=Type, y=SPARC), width=0.68, fill=NA) + scale_y_continuous(breaks=seq(0, 15, by=3), limits=c(0, 15))+theme_bw()+theme(axis.title.x = element_blank(), panel.grid.major=element_blank(), panel.grid.minor=element_blank(), panel.border=element_blank(), axis.line.x=element_line(colour="black"), axis.line.y=element_line(colour="black"))+coord_fixed(ratio=0.25)
+ggsave("~/CD31_SPARC_df.pdf", CD31_SPARC_df.p, width=6.28, height=6.28, units="in", useDingbats=FALSE)
+
+## ITGA2
+CD31_Tumor.ann$ITGA2 <- gse51401.exp.loess["ITGA2", rownames(CD31_Tumor.ann)]
+CD31_Normal.ann$ITGA2 <- gse51401.exp.loess["ITGA2", rownames(CD31_Normal.ann)]
+boxplot(CD31_Tumor.ann$ITGA2, CD31_Normal.ann$ITGA2)
+CD31.EC.ann <- rbind(CD31_Normal.ann, CD31_Tumor.ann)
+CD31.EC.ann_s <-summarySE(CD31.EC.ann, measurevar="ITGA2", groupvars="Type")
+t.test(ITGA2 ~ Type, data=CD31.EC.ann, paired=TRUE)
+
+CD31_ITGA2_df.p <- ggplot() + geom_point(data=CD31.EC.ann, size=9, alpha=0.8, aes(x=Type, y=ITGA2, colour=Patient, shape=Type)) + scale_fill_manual(values=c("#0a8a4b", "#b2e3f7", "#f6ec13", "#ed1f24", "#3953a4", "#f498c0", "#a53f97", "#af2824", "#d1d3d4", "#231f20", "#69bd45", "#fbb065", "#6479a2", "#925e1c", "#281d7b", "#4c5751")) + geom_line(data=CD31.EC.ann, aes(x=Type, y=ITGA2, colour=Patient, group=Patient)) + scale_colour_manual(values=c("#0a8a4b", "#b2e3f7", "#f6ec13", "#ed1f24", "#3953a4", "#f498c0", "#a53f97", "#af2824", "#d1d3d4", "#231f20", "#69bd45", "#fbb065", "#6479a2", "#925e1c", "#281d7b", "#4c5751")) + geom_errorbar(data=CD31.EC.ann_s, aes(x=Type, y=ITGA2, ymin=ITGA2-se, ymax=ITGA2+se), width=0.32)+ geom_boxplot(data=CD31.EC.ann_s, aes(x=Type, y=ITGA2), width=0.68, fill=NA) + scale_y_continuous(breaks=seq(0, 15, by=3), limits=c(0, 15))+theme_bw()+theme(axis.title.x = element_blank(), panel.grid.major=element_blank(), panel.grid.minor=element_blank(), panel.border=element_blank(), axis.line.x=element_line(colour="black"), axis.line.y=element_line(colour="black"))+coord_fixed(ratio=0.25)
+ggsave("~/CD31_ITGA2_df.pdf", CD31_ITGA2_df.p, width=6.28, height=6.28, units="in", useDingbats=FALSE)
+
+## LAMB1
+CD31_Tumor.ann$LAMB1 <- gse51401.exp.loess["LAMB1", rownames(CD31_Tumor.ann)]
+CD31_Normal.ann$LAMB1 <- gse51401.exp.loess["LAMB1", rownames(CD31_Normal.ann)]
+boxplot(CD31_Tumor.ann$LAMB1, CD31_Normal.ann$LAMB1)
+CD31.EC.ann <- rbind(CD31_Normal.ann, CD31_Tumor.ann)
+CD31.EC.ann_s <-summarySE(CD31.EC.ann, measurevar="LAMB1", groupvars="Type")
+t.test(LAMB1 ~ Type, data=CD31.EC.ann, paired=TRUE)
+
+CD31_LAMB1_df.p <- ggplot() + geom_point(data=CD31.EC.ann, size=9, alpha=0.8, aes(x=Type, y=LAMB1, colour=Patient, shape=Type)) + scale_fill_manual(values=c("#0a8a4b", "#b2e3f7", "#f6ec13", "#ed1f24", "#3953a4", "#f498c0", "#a53f97", "#af2824", "#d1d3d4", "#231f20", "#69bd45", "#fbb065", "#6479a2", "#925e1c", "#281d7b", "#4c5751")) + geom_line(data=CD31.EC.ann, aes(x=Type, y=LAMB1, colour=Patient, group=Patient)) + scale_colour_manual(values=c("#0a8a4b", "#b2e3f7", "#f6ec13", "#ed1f24", "#3953a4", "#f498c0", "#a53f97", "#af2824", "#d1d3d4", "#231f20", "#69bd45", "#fbb065", "#6479a2", "#925e1c", "#281d7b", "#4c5751")) + geom_errorbar(data=CD31.EC.ann_s, aes(x=Type, y=LAMB1, ymin=LAMB1-se, ymax=LAMB1+se), width=0.32)+ geom_boxplot(data=CD31.EC.ann_s, aes(x=Type, y=LAMB1), width=0.68, fill=NA) + scale_y_continuous(breaks=seq(0, 15, by=3), limits=c(0, 15))+theme_bw()+theme(axis.title.x = element_blank(), panel.grid.major=element_blank(), panel.grid.minor=element_blank(), panel.border=element_blank(), axis.line.x=element_line(colour="black"), axis.line.y=element_line(colour="black"))+coord_fixed(ratio=0.25)
+ggsave("~/CD31_LAMB1_df.pdf", CD31_LAMB1_df.p, width=6.28, height=6.28, units="in", useDingbats=FALSE)
+
+## LAMC1
+CD31_Tumor.ann$LAMC1 <- gse51401.exp.loess["LAMC1", rownames(CD31_Tumor.ann)]
+CD31_Normal.ann$LAMC1 <- gse51401.exp.loess["LAMC1", rownames(CD31_Normal.ann)]
+boxplot(CD31_Tumor.ann$LAMC1, CD31_Normal.ann$LAMC1)
+CD31.EC.ann <- rbind(CD31_Normal.ann, CD31_Tumor.ann)
+CD31.EC.ann_s <-summarySE(CD31.EC.ann, measurevar="LAMC1", groupvars="Type")
+t.test(LAMC1 ~ Type, data=CD31.EC.ann, paired=TRUE)
+
+CD31_LAMC1_df.p <- ggplot() + geom_point(data=CD31.EC.ann, size=9, alpha=0.8, aes(x=Type, y=LAMC1, colour=Patient, shape=Type)) + scale_fill_manual(values=c("#0a8a4b", "#b2e3f7", "#f6ec13", "#ed1f24", "#3953a4", "#f498c0", "#a53f97", "#af2824", "#d1d3d4", "#231f20", "#69bd45", "#fbb065", "#6479a2", "#925e1c", "#281d7b", "#4c5751")) + geom_line(data=CD31.EC.ann, aes(x=Type, y=LAMC1, colour=Patient, group=Patient)) + scale_colour_manual(values=c("#0a8a4b", "#b2e3f7", "#f6ec13", "#ed1f24", "#3953a4", "#f498c0", "#a53f97", "#af2824", "#d1d3d4", "#231f20", "#69bd45", "#fbb065", "#6479a2", "#925e1c", "#281d7b", "#4c5751")) + geom_errorbar(data=CD31.EC.ann_s, aes(x=Type, y=LAMC1, ymin=LAMC1-se, ymax=LAMC1+se), width=0.32)+ geom_boxplot(data=CD31.EC.ann_s, aes(x=Type, y=LAMC1), width=0.68, fill=NA) + scale_y_continuous(breaks=seq(0, 15, by=3), limits=c(0, 15))+theme_bw()+theme(axis.title.x = element_blank(), panel.grid.major=element_blank(), panel.grid.minor=element_blank(), panel.border=element_blank(), axis.line.x=element_line(colour="black"), axis.line.y=element_line(colour="black"))+coord_fixed(ratio=0.25)
+ggsave("~/CD31_LAMC1_df.pdf", CD31_LAMC1_df.p, width=6.28, height=6.28, units="in", useDingbats=FALSE)
+
+## SERPINH1
+CD31_Tumor.ann$SERPINH1 <- gse51401.exp.loess["SERPINH1", rownames(CD31_Tumor.ann)]
+CD31_Normal.ann$SERPINH1 <- gse51401.exp.loess["SERPINH1", rownames(CD31_Normal.ann)]
+boxplot(CD31_Tumor.ann$SERPINH1, CD31_Normal.ann$SERPINH1)
+CD31.EC.ann <- rbind(CD31_Normal.ann, CD31_Tumor.ann)
+CD31.EC.ann_s <-summarySE(CD31.EC.ann, measurevar="SERPINH1", groupvars="Type")
+t.test(SERPINH1 ~ Type, data=CD31.EC.ann, paired=TRUE)
+
+CD31_SERPINH1_df.p <- ggplot() + geom_point(data=CD31.EC.ann, size=9, alpha=0.8, aes(x=Type, y=SERPINH1, colour=Patient, shape=Type)) + scale_fill_manual(values=c("#0a8a4b", "#b2e3f7", "#f6ec13", "#ed1f24", "#3953a4", "#f498c0", "#a53f97", "#af2824", "#d1d3d4", "#231f20", "#69bd45", "#fbb065", "#6479a2", "#925e1c", "#281d7b", "#4c5751")) + geom_line(data=CD31.EC.ann, aes(x=Type, y=SERPINH1, colour=Patient, group=Patient)) + scale_colour_manual(values=c("#0a8a4b", "#b2e3f7", "#f6ec13", "#ed1f24", "#3953a4", "#f498c0", "#a53f97", "#af2824", "#d1d3d4", "#231f20", "#69bd45", "#fbb065", "#6479a2", "#925e1c", "#281d7b", "#4c5751")) + geom_errorbar(data=CD31.EC.ann_s, aes(x=Type, y=SERPINH1, ymin=SERPINH1-se, ymax=SERPINH1+se), width=0.32)+ geom_boxplot(data=CD31.EC.ann_s, aes(x=Type, y=SERPINH1), width=0.68, fill=NA) + scale_y_continuous(breaks=seq(0, 15, by=3), limits=c(0, 15))+theme_bw()+theme(axis.title.x = element_blank(), panel.grid.major=element_blank(), panel.grid.minor=element_blank(), panel.border=element_blank(), axis.line.x=element_line(colour="black"), axis.line.y=element_line(colour="black"))+coord_fixed(ratio=0.25)
+ggsave("~/CD31_SERPINH1_df.pdf", CD31_SERPINH1_df.p, width=6.28, height=6.28, units="in", useDingbats=FALSE)
+
+## NID2
+CD31_Tumor.ann$NID2 <- gse51401.exp.loess["NID2", rownames(CD31_Tumor.ann)]
+CD31_Normal.ann$NID2 <- gse51401.exp.loess["NID2", rownames(CD31_Normal.ann)]
+boxplot(CD31_Tumor.ann$NID2, CD31_Normal.ann$NID2)
+CD31.EC.ann <- rbind(CD31_Normal.ann, CD31_Tumor.ann)
+CD31.EC.ann_s <-summarySE(CD31.EC.ann, measurevar="NID2", groupvars="Type")
+t.test(NID2 ~ Type, data=CD31.EC.ann, paired=TRUE)
+
+CD31_NID2_df.p <- ggplot() + geom_point(data=CD31.EC.ann, size=9, alpha=0.8, aes(x=Type, y=NID2, colour=Patient, shape=Type)) + scale_fill_manual(values=c("#0a8a4b", "#b2e3f7", "#f6ec13", "#ed1f24", "#3953a4", "#f498c0", "#a53f97", "#af2824", "#d1d3d4", "#231f20", "#69bd45", "#fbb065", "#6479a2", "#925e1c", "#281d7b", "#4c5751")) + geom_line(data=CD31.EC.ann, aes(x=Type, y=NID2, colour=Patient, group=Patient)) + scale_colour_manual(values=c("#0a8a4b", "#b2e3f7", "#f6ec13", "#ed1f24", "#3953a4", "#f498c0", "#a53f97", "#af2824", "#d1d3d4", "#231f20", "#69bd45", "#fbb065", "#6479a2", "#925e1c", "#281d7b", "#4c5751")) + geom_errorbar(data=CD31.EC.ann_s, aes(x=Type, y=NID2, ymin=NID2-se, ymax=NID2+se), width=0.32)+ geom_boxplot(data=CD31.EC.ann_s, aes(x=Type, y=NID2), width=0.68, fill=NA) + scale_y_continuous(breaks=seq(0, 15, by=3), limits=c(0, 15))+theme_bw()+theme(axis.title.x = element_blank(), panel.grid.major=element_blank(), panel.grid.minor=element_blank(), panel.border=element_blank(), axis.line.x=element_line(colour="black"), axis.line.y=element_line(colour="black"))+coord_fixed(ratio=0.25)
+ggsave("~/CD31_NID2_df.pdf", CD31_NID2_df.p, width=6.28, height=6.28, units="in", useDingbats=FALSE)
+
+## LY6H
+CD31_Tumor.ann$LY6H <- gse51401.exp.loess["LY6H", rownames(CD31_Tumor.ann)]
+CD31_Normal.ann$LY6H <- gse51401.exp.loess["LY6H", rownames(CD31_Normal.ann)]
+boxplot(CD31_Tumor.ann$LY6H, CD31_Normal.ann$LY6H)
+CD31.EC.ann <- rbind(CD31_Normal.ann, CD31_Tumor.ann)
+CD31.EC.ann_s <-summarySE(CD31.EC.ann, measurevar="LY6H", groupvars="Type")
+t.test(LY6H ~ Type, data=CD31.EC.ann, paired=TRUE)
+
+CD31_LY6H_df.p <- ggplot() + geom_point(data=CD31.EC.ann, size=9, alpha=0.8, aes(x=Type, y=LY6H, colour=Patient, shape=Type)) + scale_fill_manual(values=c("#0a8a4b", "#b2e3f7", "#f6ec13", "#ed1f24", "#3953a4", "#f498c0", "#a53f97", "#af2824", "#d1d3d4", "#231f20", "#69bd45", "#fbb065", "#6479a2", "#925e1c", "#281d7b", "#4c5751")) + geom_line(data=CD31.EC.ann, aes(x=Type, y=LY6H, colour=Patient, group=Patient)) + scale_colour_manual(values=c("#0a8a4b", "#b2e3f7", "#f6ec13", "#ed1f24", "#3953a4", "#f498c0", "#a53f97", "#af2824", "#d1d3d4", "#231f20", "#69bd45", "#fbb065", "#6479a2", "#925e1c", "#281d7b", "#4c5751")) + geom_errorbar(data=CD31.EC.ann_s, aes(x=Type, y=LY6H, ymin=LY6H-se, ymax=LY6H+se), width=0.32)+ geom_boxplot(data=CD31.EC.ann_s, aes(x=Type, y=LY6H), width=0.68, fill=NA) + scale_y_continuous(breaks=seq(0, 15, by=3), limits=c(0, 15))+theme_bw()+theme(axis.title.x = element_blank(), panel.grid.major=element_blank(), panel.grid.minor=element_blank(), panel.border=element_blank(), axis.line.x=element_line(colour="black"), axis.line.y=element_line(colour="black"))+coord_fixed(ratio=0.25)
+ggsave("~/CD31_LY6H_df.pdf", CD31_LY6H_df.p, width=6.28, height=6.28, units="in", useDingbats=FALSE)
+
+## FABP5
+CD31_Tumor.ann$FABP5 <- gse51401.exp.loess["FABP5", rownames(CD31_Tumor.ann)]
+CD31_Normal.ann$FABP5 <- gse51401.exp.loess["FABP5", rownames(CD31_Normal.ann)]
+boxplot(CD31_Tumor.ann$FABP5, CD31_Normal.ann$FABP5)
+CD31.EC.ann <- rbind(CD31_Normal.ann, CD31_Tumor.ann)
+CD31.EC.ann_s <-summarySE(CD31.EC.ann, measurevar="FABP5", groupvars="Type")
+t.test(FABP5 ~ Type, data=CD31.EC.ann, paired=TRUE)
+
+CD31_FABP5_df.p <- ggplot() + geom_point(data=CD31.EC.ann, size=9, alpha=0.8, aes(x=Type, y=FABP5, colour=Patient, shape=Type)) + scale_fill_manual(values=c("#0a8a4b", "#b2e3f7", "#f6ec13", "#ed1f24", "#3953a4", "#f498c0", "#a53f97", "#af2824", "#d1d3d4", "#231f20", "#69bd45", "#fbb065", "#6479a2", "#925e1c", "#281d7b", "#4c5751")) + geom_line(data=CD31.EC.ann, aes(x=Type, y=FABP5, colour=Patient, group=Patient)) + scale_colour_manual(values=c("#0a8a4b", "#b2e3f7", "#f6ec13", "#ed1f24", "#3953a4", "#f498c0", "#a53f97", "#af2824", "#d1d3d4", "#231f20", "#69bd45", "#fbb065", "#6479a2", "#925e1c", "#281d7b", "#4c5751")) + geom_errorbar(data=CD31.EC.ann_s, aes(x=Type, y=FABP5, ymin=FABP5-se, ymax=FABP5+se), width=0.32)+ geom_boxplot(data=CD31.EC.ann_s, aes(x=Type, y=FABP5), width=0.68, fill=NA) + scale_y_continuous(breaks=seq(0, 15, by=3), limits=c(0, 16))+theme_bw()+theme(axis.title.x = element_blank(), panel.grid.major=element_blank(), panel.grid.minor=element_blank(), panel.border=element_blank(), axis.line.x=element_line(colour="black"), axis.line.y=element_line(colour="black"))+coord_fixed(ratio=0.25)
+ggsave("~/CD31_FABP5_df.pdf", CD31_FABP5_df.p, width=6.28, height=6.28, units="in", useDingbats=FALSE)
+
+## HMGB2
+CD31_Tumor.ann$HMGB2 <- gse51401.exp.loess["HMGB2", rownames(CD31_Tumor.ann)]
+CD31_Normal.ann$HMGB2 <- gse51401.exp.loess["HMGB2", rownames(CD31_Normal.ann)]
+boxplot(CD31_Tumor.ann$HMGB2, CD31_Normal.ann$HMGB2)
+CD31.EC.ann <- rbind(CD31_Normal.ann, CD31_Tumor.ann)
+CD31.EC.ann_s <-summarySE(CD31.EC.ann, measurevar="HMGB2", groupvars="Type")
+t.test(HMGB2 ~ Type, data=CD31.EC.ann, paired=TRUE)
+
+CD31_HMGB2_df.p <- ggplot() + geom_point(data=CD31.EC.ann, size=9, alpha=0.8, aes(x=Type, y=HMGB2, colour=Patient, shape=Type)) + scale_fill_manual(values=c("#0a8a4b", "#b2e3f7", "#f6ec13", "#ed1f24", "#3953a4", "#f498c0", "#a53f97", "#af2824", "#d1d3d4", "#231f20", "#69bd45", "#fbb065", "#6479a2", "#925e1c", "#281d7b", "#4c5751")) + geom_line(data=CD31.EC.ann, aes(x=Type, y=HMGB2, colour=Patient, group=Patient)) + scale_colour_manual(values=c("#0a8a4b", "#b2e3f7", "#f6ec13", "#ed1f24", "#3953a4", "#f498c0", "#a53f97", "#af2824", "#d1d3d4", "#231f20", "#69bd45", "#fbb065", "#6479a2", "#925e1c", "#281d7b", "#4c5751")) + geom_errorbar(data=CD31.EC.ann_s, aes(x=Type, y=HMGB2, ymin=HMGB2-se, ymax=HMGB2+se), width=0.32)+ geom_boxplot(data=CD31.EC.ann_s, aes(x=Type, y=HMGB2), width=0.68, fill=NA) + scale_y_continuous(breaks=seq(0, 15, by=3), limits=c(0, 15))+theme_bw()+theme(axis.title.x = element_blank(), panel.grid.major=element_blank(), panel.grid.minor=element_blank(), panel.border=element_blank(), axis.line.x=element_line(colour="black"), axis.line.y=element_line(colour="black"))+coord_fixed(ratio=0.25)
+ggsave("~/CD31_HMGB2_df.pdf", CD31_HMGB2_df.p, width=6.28, height=6.28, units="in", useDingbats=FALSE)
+
+## MKI67
+CD31_Tumor.ann$MKI67 <- gse51401.exp.loess["MKI67", rownames(CD31_Tumor.ann)]
+CD31_Normal.ann$MKI67 <- gse51401.exp.loess["MKI67", rownames(CD31_Normal.ann)]
+boxplot(CD31_Tumor.ann$MKI67, CD31_Normal.ann$MKI67)
+CD31.EC.ann <- rbind(CD31_Normal.ann, CD31_Tumor.ann)
+CD31.EC.ann_s <-summarySE(CD31.EC.ann, measurevar="MKI67", groupvars="Type")
+t.test(MKI67 ~ Type, data=CD31.EC.ann, paired=TRUE)
+
+CD31_MKI67_df.p <- ggplot() + geom_point(data=CD31.EC.ann, size=9, alpha=0.8, aes(x=Type, y=MKI67, colour=Patient, shape=Type)) + scale_fill_manual(values=c("#0a8a4b", "#b2e3f7", "#f6ec13", "#ed1f24", "#3953a4", "#f498c0", "#a53f97", "#af2824", "#d1d3d4", "#231f20", "#69bd45", "#fbb065", "#6479a2", "#925e1c", "#281d7b", "#4c5751")) + geom_line(data=CD31.EC.ann, aes(x=Type, y=MKI67, colour=Patient, group=Patient)) + scale_colour_manual(values=c("#0a8a4b", "#b2e3f7", "#f6ec13", "#ed1f24", "#3953a4", "#f498c0", "#a53f97", "#af2824", "#d1d3d4", "#231f20", "#69bd45", "#fbb065", "#6479a2", "#925e1c", "#281d7b", "#4c5751")) + geom_errorbar(data=CD31.EC.ann_s, aes(x=Type, y=MKI67, ymin=MKI67-se, ymax=MKI67+se), width=0.32)+ geom_boxplot(data=CD31.EC.ann_s, aes(x=Type, y=MKI67), width=0.68, fill=NA) + scale_y_continuous(breaks=seq(0, 15, by=3), limits=c(0, 15))+theme_bw()+theme(axis.title.x = element_blank(), panel.grid.major=element_blank(), panel.grid.minor=element_blank(), panel.border=element_blank(), axis.line.x=element_line(colour="black"), axis.line.y=element_line(colour="black"))+coord_fixed(ratio=0.25)
+ggsave("~/CD31_MKI67_df.pdf", CD31_MKI67_df.p, width=6.28, height=6.28, units="in", useDingbats=FALSE)
+
+## TOP2A
+CD31_Tumor.ann$TOP2A <- gse51401.exp.loess["TOP2A", rownames(CD31_Tumor.ann)]
+CD31_Normal.ann$TOP2A <- gse51401.exp.loess["TOP2A", rownames(CD31_Normal.ann)]
+boxplot(CD31_Tumor.ann$TOP2A, CD31_Normal.ann$TOP2A)
+CD31.EC.ann <- rbind(CD31_Normal.ann, CD31_Tumor.ann)
+CD31.EC.ann_s <-summarySE(CD31.EC.ann, measurevar="TOP2A", groupvars="Type")
+t.test(TOP2A ~ Type, data=CD31.EC.ann, paired=TRUE)
+
+CD31_TOP2A_df.p <- ggplot() + geom_point(data=CD31.EC.ann, size=9, alpha=0.8, aes(x=Type, y=TOP2A, colour=Patient, shape=Type)) + scale_fill_manual(values=c("#0a8a4b", "#b2e3f7", "#f6ec13", "#ed1f24", "#3953a4", "#f498c0", "#a53f97", "#af2824", "#d1d3d4", "#231f20", "#69bd45", "#fbb065", "#6479a2", "#925e1c", "#281d7b", "#4c5751")) + geom_line(data=CD31.EC.ann, aes(x=Type, y=TOP2A, colour=Patient, group=Patient)) + scale_colour_manual(values=c("#0a8a4b", "#b2e3f7", "#f6ec13", "#ed1f24", "#3953a4", "#f498c0", "#a53f97", "#af2824", "#d1d3d4", "#231f20", "#69bd45", "#fbb065", "#6479a2", "#925e1c", "#281d7b", "#4c5751")) + geom_errorbar(data=CD31.EC.ann_s, aes(x=Type, y=TOP2A, ymin=TOP2A-se, ymax=TOP2A+se), width=0.32)+ geom_boxplot(data=CD31.EC.ann_s, aes(x=Type, y=TOP2A), width=0.68, fill=NA) + scale_y_continuous(breaks=seq(0, 15, by=3), limits=c(0, 15))+theme_bw()+theme(axis.title.x = element_blank(), panel.grid.major=element_blank(), panel.grid.minor=element_blank(), panel.border=element_blank(), axis.line.x=element_line(colour="black"), axis.line.y=element_line(colour="black"))+coord_fixed(ratio=0.25)
+ggsave("~/CD31_TOP2A_df.pdf", CD31_TOP2A_df.p, width=6.28, height=6.28, units="in", useDingbats=FALSE)
+
+## ESM1
+CD31_Tumor.ann$ESM1 <- gse51401.exp.loess["ESM1", rownames(CD31_Tumor.ann)]
+CD31_Normal.ann$ESM1 <- gse51401.exp.loess["ESM1", rownames(CD31_Normal.ann)]
+boxplot(CD31_Tumor.ann$ESM1, CD31_Normal.ann$ESM1)
+CD31.EC.ann <- rbind(CD31_Normal.ann, CD31_Tumor.ann)
+CD31.EC.ann_s <-summarySE(CD31.EC.ann, measurevar="ESM1", groupvars="Type")
+t.test(ESM1 ~ Type, data=CD31.EC.ann, paired=TRUE)
+
+CD31_ESM1_df.p <- ggplot() + geom_point(data=CD31.EC.ann, size=9, alpha=0.8, aes(x=Type, y=ESM1, colour=Patient, shape=Type)) + scale_fill_manual(values=c("#0a8a4b", "#b2e3f7", "#f6ec13", "#ed1f24", "#3953a4", "#f498c0", "#a53f97", "#af2824", "#d1d3d4", "#231f20", "#69bd45", "#fbb065", "#6479a2", "#925e1c", "#281d7b", "#4c5751")) + geom_line(data=CD31.EC.ann, aes(x=Type, y=ESM1, colour=Patient, group=Patient)) + scale_colour_manual(values=c("#0a8a4b", "#b2e3f7", "#f6ec13", "#ed1f24", "#3953a4", "#f498c0", "#a53f97", "#af2824", "#d1d3d4", "#231f20", "#69bd45", "#fbb065", "#6479a2", "#925e1c", "#281d7b", "#4c5751")) + geom_errorbar(data=CD31.EC.ann_s, aes(x=Type, y=ESM1, ymin=ESM1-se, ymax=ESM1+se), width=0.32)+ geom_boxplot(data=CD31.EC.ann_s, aes(x=Type, y=ESM1), width=0.68, fill=NA) + scale_y_continuous(breaks=seq(0, 15, by=3), limits=c(0, 15))+theme_bw()+theme(axis.title.x = element_blank(), panel.grid.major=element_blank(), panel.grid.minor=element_blank(), panel.border=element_blank(), axis.line.x=element_line(colour="black"), axis.line.y=element_line(colour="black"))+coord_fixed(ratio=0.25)
+ggsave("~/CD31_ESM1_df.pdf", CD31_ESM1_df.p, width=6.28, height=6.28, units="in", useDingbats=FALSE)
+
+## VEGFA
+CD31_Tumor.ann$VEGFA <- gse51401.exp.loess["VEGFA", rownames(CD31_Tumor.ann)]
+CD31_Normal.ann$VEGFA <- gse51401.exp.loess["VEGFA", rownames(CD31_Normal.ann)]
+boxplot(CD31_Tumor.ann$VEGFA, CD31_Normal.ann$VEGFA)
+CD31.EC.ann <- rbind(CD31_Normal.ann, CD31_Tumor.ann)
+CD31.EC.ann_s <-summarySE(CD31.EC.ann, measurevar="VEGFA", groupvars="Type")
+t.test(VEGFA ~ Type, data=CD31.EC.ann, paired=TRUE)
+
+CD31_VEGFA_df.p <- ggplot() + geom_point(data=CD31.EC.ann, size=9, alpha=0.8, aes(x=Type, y=VEGFA, colour=Patient, shape=Type)) + scale_fill_manual(values=c("#0a8a4b", "#b2e3f7", "#f6ec13", "#ed1f24", "#3953a4", "#f498c0", "#a53f97", "#af2824", "#d1d3d4", "#231f20", "#69bd45", "#fbb065", "#6479a2", "#925e1c", "#281d7b", "#4c5751")) + geom_line(data=CD31.EC.ann, aes(x=Type, y=VEGFA, colour=Patient, group=Patient)) + scale_colour_manual(values=c("#0a8a4b", "#b2e3f7", "#f6ec13", "#ed1f24", "#3953a4", "#f498c0", "#a53f97", "#af2824", "#d1d3d4", "#231f20", "#69bd45", "#fbb065", "#6479a2", "#925e1c", "#281d7b", "#4c5751")) + geom_errorbar(data=CD31.EC.ann_s, aes(x=Type, y=VEGFA, ymin=VEGFA-se, ymax=VEGFA+se), width=0.32)+ geom_boxplot(data=CD31.EC.ann_s, aes(x=Type, y=VEGFA), width=0.68, fill=NA) + scale_y_continuous(breaks=seq(0, 15, by=3), limits=c(0, 15))+theme_bw()+theme(axis.title.x = element_blank(), panel.grid.major=element_blank(), panel.grid.minor=element_blank(), panel.border=element_blank(), axis.line.x=element_line(colour="black"), axis.line.y=element_line(colour="black"))+coord_fixed(ratio=0.25)
+ggsave("~/CD31_VEGFA_df.pdf", CD31_VEGFA_df.p, width=6.28, height=6.28, units="in", useDingbats=FALSE)
+```
+
+```{r}
+## CD105 example
+CD105_Lyve1_df.p <- ggplot() + geom_point(data=CD105.EC.ann, shape=16, size=6, alpha=0.8, aes(x=Type, y=LYVE1, colour=Patient)) + scale_fill_manual(values=c("#0a8a4b", "#3953a4", "#a53f97", "#d1d3d4", "#6479a2", "#925e1c", "#281d7b", "#4c5751")) + geom_line(data=CD105.EC.ann, aes(x=Type, y=LYVE1, colour=Patient, group=Patient)) + scale_colour_manual(values=c("#0a8a4b", "#3953a4", "#a53f97", "#d1d3d4", "#6479a2", "#925e1c", "#281d7b", "#4c5751")) + geom_errorbar(data=CD105.EC.ann_s, aes(x=Type, y=LYVE1, ymin=LYVE1-se, ymax=LYVE1+se), width=0.32)+ geom_boxplot(data=CD105.EC.ann_s, aes(x=Type, y=LYVE1), width=0.68, fill=NA) + scale_y_continuous(breaks=seq(0, 15, by=3), limits=c(0, 15))+theme_bw()+theme(axis.title.x = element_blank(), panel.grid.major=element_blank(), panel.grid.minor=element_blank(), panel.border=element_blank(), axis.line.x=element_line(colour="black"), axis.line.y=element_line(colour="black"))+coord_fixed(ratio=0.25)
+ggsave("~/CD105_Lyve1_df.pdf", CD105_Lyve1_df.p, width=6.28, height=6.28, units="in", useDingbats=FALSE)
+
+```
+
+## APOE Plot
+
+```{r}
+library(ggplot2)
+source("summarySE.R")
+
+CD105_Tumor.ann <- subset(gse51401.ann, Marker == "CD105" & Type == "TEC")
+CD105_Normal.ann <- subset(gse51401.ann, Marker == "CD105" & Type == "NEC")
+
+CD31_Tumor.ann <- subset(gse51401.ann, Marker == "CD31" & Type == "TEC")
+CD31_Normal.ann <- subset(gse51401.ann, Marker == "CD31" & Type == "NEC")
+
+CD105_Tumor.ann$APOE <- gse51401.exp.loess["APOE", rownames(CD105_Tumor.ann)]
+CD105_Normal.ann$APOE <- gse51401.exp.loess["APOE", rownames(CD105_Normal.ann)]
+boxplot(CD105_Tumor.ann$APOE, CD105_Normal.ann$APOE)
+CD105.EC.ann <- rbind(CD105_Normal.ann, CD105_Tumor.ann)
+CD105.EC.ann_s <-summarySE(CD105.EC.ann, measurevar="APOE", groupvars="Type")
+t.test(APOE ~ Type, data=CD105.EC.ann, paired=TRUE)
+
+CD105_APOE_df.p <- ggplot() + geom_point(data=CD105.EC.ann, shape=16, size=6, alpha=0.8, aes(x=Type, y=APOE, colour=Patient)) + scale_fill_manual(values=c("#0a8a4b", "#3953a4", "#a53f97", "#d1d3d4", "#6479a2", "#925e1c", "#281d7b", "#4c5751")) + geom_line(data=CD105.EC.ann, aes(x=Type, y=APOE, colour=Patient, group=Patient)) + scale_colour_manual(values=c("#0a8a4b", "#3953a4", "#a53f97", "#d1d3d4", "#6479a2", "#925e1c", "#281d7b", "#4c5751")) + geom_errorbar(data=CD105.EC.ann_s, aes(x=Type, y=APOE, ymin=APOE-se, ymax=APOE+se), width=0.32)+ geom_boxplot(data=CD105.EC.ann_s, aes(x=Type, y=APOE), width=0.68, fill=NA) + scale_y_continuous(breaks=seq(0, 15, by=3), limits=c(0, 15))+theme_bw()+theme(axis.title.x = element_blank(), panel.grid.major=element_blank(), panel.grid.minor=element_blank(), panel.border=element_blank(), axis.line.x=element_line(colour="black"), axis.line.y=element_line(colour="black"))+coord_fixed(ratio=0.25)
+ggsave("~/CD105_APOE_df.pdf", CD105_APOE_df.p, width=6.28, height=6.28, units="in", useDingbats=FALSE)
+
+CD31_Tumor.ann$APOE <- gse51401.exp.loess["APOE", rownames(CD31_Tumor.ann)]
+CD31_Normal.ann$APOE <- gse51401.exp.loess["APOE", rownames(CD31_Normal.ann)]
+boxplot(CD31_Tumor.ann$APOE, CD31_Normal.ann$APOE)
+CD31.EC.ann <- rbind(CD31_Normal.ann, CD31_Tumor.ann)
+CD31.EC.ann_s <-summarySE(CD31.EC.ann, measurevar="APOE", groupvars="Type")
+t.test(APOE ~ Type, data=CD31.EC.ann, paired=TRUE)
+
+CD31_APOE_df.p <- ggplot() + geom_point(data=CD31.EC.ann, shape=16, size=6, alpha=0.8, aes(x=Type, y=APOE, colour=Patient)) + scale_fill_manual(values=c("#0a8a4b", "#b2e3f7", "#f6ec13", "#ed1f24", "#3953a4", "#f498c0", "#a53f97", "#af2824", "#d1d3d4", "#231f20", "#69bd45", "#fbb065", "#6479a2", "#925e1c", "#281d7b", "#4c5751")) + geom_line(data=CD31.EC.ann, aes(x=Type, y=APOE, colour=Patient, group=Patient)) + scale_colour_manual(values=c("#0a8a4b", "#b2e3f7", "#f6ec13", "#ed1f24", "#3953a4", "#f498c0", "#a53f97", "#af2824", "#d1d3d4", "#231f20", "#69bd45", "#fbb065", "#6479a2", "#925e1c", "#281d7b", "#4c5751")) + geom_errorbar(data=CD31.EC.ann_s, aes(x=Type, y=APOE, ymin=APOE-se, ymax=APOE+se), width=0.32)+ geom_boxplot(data=CD31.EC.ann_s, aes(x=Type, y=APOE), width=0.68, fill=NA) + scale_y_continuous(breaks=seq(0, 15, by=3), limits=c(0, 15))+theme_bw()+theme(axis.title.x = element_blank(), panel.grid.major=element_blank(), panel.grid.minor=element_blank(), panel.border=element_blank(), axis.line.x=element_line(colour="black"), axis.line.y=element_line(colour="black"))+coord_fixed(ratio=0.25)
+ggsave("~/CD31_APOE_df.pdf", CD31_APOE_df.p, width=6.28, height=6.28, units="in", useDingbats=FALSE)
+```
+
+## Choose Patients (with tumor (TC))
+
+```{r}
+Patient_select <- subset(gse51401.ann, Type=="TC")$Patient
+gse51401.subset.ann <- subset(gse51401.ann, Patient %in% Patient_select)
+gse51401.subset.ann <- subset(gse51401.subset.ann, Type %in% c("TEC", "TC"))
+TEC_select <- rownames(gse51401.subset.ann)[gse51401.subset.ann$Type == "TEC"]
+TC_select <- rownames(gse51401.subset.ann)[gse51401.subset.ann$Type == "TC"]
+all.equal(gse51401.subset.ann[TEC_select, "Patient"], gse51401.subset.ann[TC_select, "Patient"])
+cor.test(gse51401.exp.mednorm["CD4", TC_select], gse51401.exp.mednorm["LYVE1", TEC_select], method="spearman")
+cor.test(gse51401.exp.loess["CD8A", TC_select], gse51401.exp.loess["LYVE1", TEC_select], method="spearman")
+```
+
+## CIBERSORT
+
+```{r}
+CIBERSORT <- function(expr, outputName) {
+  ## the input expr is the output of geneMatrix
+  write.table(data.frame("GeneSymbol"=rownames(expr), as.data.frame(expr), row.names=NULL), file=outputName, quote=FALSE, sep="\t", row.names=FALSE)
+}
+
+select_mednorm <- na.omit(gse51401.exp.mednorm[, TC_select])
+select_loess <- na.omit(gse51401.exp.loess[, TC_select])
+
+CIBERSORT(2^select_mednorm, "gse51401.mednorm.txt")
+CIBERSORT(2^select_loess, "gse51401.loess.txt")
+
+CIBERSORT.abs.mednorm <- read.csv("CIBERSORT.Output_Abs_mednorm.csv", row.names=1, stringsAsFactors=FALSE)
+all.equal(rownames(CIBERSORT.abs.mednorm), TC_select)
+CIBERSORT.mednorm <- read.csv("CIBERSORT.Output_mednorm.csv", row.names=1, stringsAsFactors=FALSE)
+all.equal(rownames(CIBERSORT.mednorm), TC_select)
+
+plot(gse51401.exp.mednorm["LYVE1", TEC_select], CIBERSORT.abs.mednorm$B.cells.naive)
+plot(gse51401.exp.mednorm["LYVE1", TEC_select], CIBERSORT.abs.mednorm$B.cells.memory)
+plot(gse51401.exp.mednorm["LYVE1", TEC_select], CIBERSORT.abs.mednorm$Plasma.cells)
+plot(gse51401.exp.mednorm["LYVE1", TEC_select], CIBERSORT.abs.mednorm$T.cells.CD8)
+plot(gse51401.exp.mednorm["LYVE1", TEC_select], CIBERSORT.abs.mednorm$T.cells.CD4.naive)
+plot(gse51401.exp.mednorm["LYVE1", TEC_select], CIBERSORT.abs.mednorm$T.cells.CD4.memory.resting)
+plot(gse51401.exp.mednorm["LYVE1", TEC_select], CIBERSORT.abs.mednorm$T.cells.CD4.memory.activated)
+plot(gse51401.exp.mednorm["LYVE1", TEC_select], CIBERSORT.abs.mednorm$T.cells.follicular.helper) #
+plot(gse51401.exp.mednorm["LYVE1", TEC_select], CIBERSORT.abs.mednorm$T.cells.regulatory..Tregs.)
+plot(gse51401.exp.mednorm["LYVE1", TEC_select], CIBERSORT.abs.mednorm$T.cells.gamma.delta)
+plot(gse51401.exp.mednorm["LYVE1", TEC_select], CIBERSORT.abs.mednorm$NK.cells.resting)
+plot(gse51401.exp.mednorm["LYVE1", TEC_select], CIBERSORT.abs.mednorm$NK.cells.activated)
+plot(gse51401.exp.mednorm["LYVE1", TEC_select], CIBERSORT.abs.mednorm$Monocytes)
+plot(gse51401.exp.mednorm["LYVE1", TEC_select], CIBERSORT.abs.mednorm$Macrophages.M0) #
+plot(gse51401.exp.mednorm["LYVE1", TEC_select], CIBERSORT.abs.mednorm$Macrophages.M1)
+plot(gse51401.exp.mednorm["LYVE1", TEC_select], CIBERSORT.abs.mednorm$Macrophages.M2)
+plot(gse51401.exp.mednorm["LYVE1", TEC_select], CIBERSORT.abs.mednorm$Dendritic.cells.resting)
+plot(gse51401.exp.mednorm["LYVE1", TEC_select], CIBERSORT.abs.mednorm$Dendritic.cells.activated)
+plot(gse51401.exp.mednorm["LYVE1", TEC_select], CIBERSORT.abs.mednorm$Mast.cells.resting)
+plot(gse51401.exp.mednorm["LYVE1", TEC_select], CIBERSORT.abs.mednorm$Mast.cells.activated)
+plot(gse51401.exp.mednorm["LYVE1", TEC_select], CIBERSORT.abs.mednorm$Eosinophils)
+plot(gse51401.exp.mednorm["LYVE1", TEC_select], CIBERSORT.abs.mednorm$Neutrophils)
+plot(gse51401.exp.mednorm["LYVE1", TEC_select], CIBERSORT.abs.mednorm$Absolute.Score)
+plot(gse51401.exp.mednorm["LYVE1", TEC_select], CIBERSORT.abs.mednorm$Absolute.score)
+
+CIBERSORTx.mednorm <- read.csv("CIBERSORTx_mednorm.csv", row.names=1, stringsAsFactors=FALSE)
+all.equal(rownames(CIBERSORTx.mednorm), TC_select)
+
+plot(gse51401.exp.mednorm["LYVE1", TEC_select], CIBERSORTx.mednorm$B.cells.naive)
+plot(gse51401.exp.mednorm["LYVE1", TEC_select], CIBERSORTx.mednorm$B.cells.memory)
+plot(gse51401.exp.mednorm["LYVE1", TEC_select], CIBERSORTx.mednorm$Plasma.cells)
+plot(gse51401.exp.mednorm["LYVE1", TEC_select], CIBERSORTx.mednorm$T.cells.CD8)
+plot(gse51401.exp.mednorm["LYVE1", TEC_select], CIBERSORTx.mednorm$T.cells.CD4.naive)
+plot(gse51401.exp.mednorm["LYVE1", TEC_select], CIBERSORTx.mednorm$T.cells.CD4.memory.resting)
+plot(gse51401.exp.mednorm["LYVE1", TEC_select], CIBERSORTx.mednorm$T.cells.CD4.memory.activated)
+plot(gse51401.exp.mednorm["LYVE1", TEC_select], CIBERSORTx.mednorm$T.cells.follicular.helper) #
+plot(gse51401.exp.mednorm["LYVE1", TEC_select], CIBERSORTx.mednorm$T.cells.regulatory..Tregs.)
+plot(gse51401.exp.mednorm["LYVE1", TEC_select], CIBERSORTx.mednorm$T.cells.gamma.delta)
+plot(gse51401.exp.mednorm["LYVE1", TEC_select], CIBERSORTx.mednorm$NK.cells.resting)
+plot(gse51401.exp.mednorm["LYVE1", TEC_select], CIBERSORTx.mednorm$NK.cells.activated)
+plot(gse51401.exp.mednorm["LYVE1", TEC_select], CIBERSORTx.mednorm$Monocytes)
+plot(gse51401.exp.mednorm["LYVE1", TEC_select], CIBERSORTx.mednorm$Macrophages.M0) #
+plot(gse51401.exp.mednorm["LYVE1", TEC_select], CIBERSORTx.mednorm$Macrophages.M1)
+plot(gse51401.exp.mednorm["LYVE1", TEC_select], CIBERSORTx.mednorm$Macrophages.M2)
+plot(gse51401.exp.mednorm["LYVE1", TEC_select], CIBERSORTx.mednorm$Dendritic.cells.resting)
+plot(gse51401.exp.mednorm["LYVE1", TEC_select], CIBERSORTx.mednorm$Dendritic.cells.activated)
+plot(gse51401.exp.mednorm["LYVE1", TEC_select], CIBERSORTx.mednorm$Mast.cells.resting)
+plot(gse51401.exp.mednorm["LYVE1", TEC_select], CIBERSORTx.mednorm$Mast.cells.activated)
+plot(gse51401.exp.mednorm["LYVE1", TEC_select], CIBERSORTx.mednorm$Eosinophils)
+plot(gse51401.exp.mednorm["LYVE1", TEC_select], CIBERSORTx.mednorm$Neutrophils)
+plot(gse51401.exp.mednorm["LYVE1", TEC_select], CIBERSORTx.mednorm$Absolute.Score)
+plot(gse51401.exp.mednorm["LYVE1", TEC_select], CIBERSORTx.mednorm$Absolute.score)
+
+CIBERSORTx.mednorm2 <- read.csv("GSE115469/CIBERSORTx_Job15_Results.csv", row.names=1, stringsAsFactors=FALSE)
+all.equal(rownames(CIBERSORTx.mednorm2), TC_select)
+plot(gse51401.exp.mednorm["LYVE1", TEC_select], CIBERSORTx.mednorm2$Non.inflammatory_Macrophage)
+plot(gse51401.exp.mednorm["LYVE1", TEC_select], CIBERSORTx.mednorm2$alpha.beta_T_Cells)
+plot(gse51401.exp.mednorm["LYVE1", TEC_select], CIBERSORTx.mednorm2$Inflammatory_Macrophage)
+plot(gse51401.exp.mednorm["LYVE1", TEC_select], CIBERSORTx.mednorm2$NK.like_Cells)
+
+```
+
+
+## Create GSEA input format file
+
+```{r}
+TC.GSEA <- gse51401.exp.mednorm[, TC_select]
+TC.GSEA <- na.omit(TC.GSEA)
+TC.GSEA <- cbind(rownames(TC.GSEA), rep(NA, nrow(TC.GSEA)), TC.GSEA)
+TC.GSEA <- rbind(c("#1.2", rep("", ncol(TC.GSEA)-1)), c(nrow(TC.GSEA), ncol(TC.GSEA)-2, rep("", ncol(TC.GSEA)-2)), c("NAME", "Description", colnames(TC.GSEA)[c(-1, -2)]), TC.GSEA)
+write.table(TC.GSEA, file="GSE51401_TC_mednorm.gct", row.names=FALSE, col.names=FALSE, sep="\t", quote=FALSE)
+
+CD31TEC.cls <- matrix("", nrow=3, ncol=ncol(TC.GSEA)-2)
+CD31TEC.cls[1, 1] <- "#numeric"
+CD31TEC.cls[2, 1] <- "#LYVE1"
+CD31TEC.cls[3, ] <- gse51401.exp.mednorm["LYVE1", TEC_select]
+write.table(CD31TEC.cls, file="GSE51401_CD31TECforTC_mednorm.cls", row.names=FALSE, col.names=FALSE, sep=" ", quote=FALSE)
+```
+
+## Test CD31+ Cells
+
+## Choose Patients (with tumor (TC))
+
+```{r}
+load("~/Fig6/gse51401.RData")
+TEC_select <- rownames(gse51401.ann)[gse51401.ann$Type == "TEC" & gse51401.ann$Marker == "CD31"]
+```
+
+## Create GSEA input format file
+
+```{r}
+TEC.GSEA <- gse51401.exp.mednorm[, TEC_select]
+TEC.GSEA <- na.omit(TEC.GSEA)
+TEC.GSEA <- na.omit(TEC.GSEA)
+TEC.GSEA <- cbind(rownames(TEC.GSEA), rep(NA, nrow(TEC.GSEA)), TEC.GSEA)
+TEC.GSEA <- rbind(c("#1.2", rep("", ncol(TEC.GSEA)-1)), c(nrow(TEC.GSEA), ncol(TEC.GSEA)-2, rep("", ncol(TEC.GSEA)-2)), c("NAME", "Description", colnames(TEC.GSEA)[c(-1, -2)]), TEC.GSEA)
+write.table(TEC.GSEA, file="GSE51401_TEC_mednorm.gct", row.names=FALSE, col.names=FALSE, sep="\t", quote=FALSE)
+
+CD31TEC.cls <- matrix("", nrow=3, ncol=ncol(TEC.GSEA)-2)
+CD31TEC.cls[1, 1] <- "#numeric"
+CD31TEC.cls[2, 1] <- "#LYVE1"
+CD31TEC.cls[3, ] <- gse51401.exp.mednorm["LYVE1", TEC_select]
+write.table(CD31TEC.cls, file="GSE51401_CD31TECforTC_mednorm.cls", row.names=FALSE, col.names=FALSE, sep=" ", quote=FALSE)
+```

@@ -1,0 +1,133 @@
+---
+title: "Esm1_Quality_Control"
+author: "Lin Tian"
+date: "2026-6-01"
+output: html_document
+---
+
+# DiffBind consensus peakset + paired differential accessibility
+# Normal (N) vs tumor-associated (Met) mouse vessel ATAC-seq, paired by patient
+
+```{r}
+suppressPackageStartupMessages(library(DiffBind))
+
+samples <- data.frame(
+  SampleID   = c("N1","N3","N4","N6","Met1","Met3","Met4","Met6"),
+  Condition  = c("Normal","Normal","Normal","Normal","Met","Met","Met","Met"),
+  patient    = c("P1","P3","P4","P6","P1","P3","P4","P6"),
+  bamReads   = file.path("/mnt/user-uploads/ATAC",
+                         paste0("ATAC_", c("N1","N3","N4","N6","Met1","Met3","Met4","Met6"), "_clean.bam")),
+  Peaks      = file.path("/workspace/atac/peaks",
+                         paste0(c("N1","N3","N4","N6","Met1","Met3","Met4","Met6"), "_peaks.narrowPeak")),
+  peakCaller = "narrow",
+  stringsAsFactors = FALSE
+)
+
+dba <- dba(sampleSheet = samples, scoreCol = 5)
+dba$config$RunParallel <- FALSE
+dba <- dba.count(dba, bParallel = FALSE)
+```
+
+# Count reads in consensus peaks with DiffBind, then DESeq2 directly
+# (DiffBind 3.16 design formulas only accept standard columns, so the
+#  paired design ~ patient + condition is run in DESeq2 itself)
+
+```{r}
+suppressPackageStartupMessages(library(DESeq2))
+
+# Consensus peak coordinates + raw counts
+cnt <- dba.peakset(dba, bRetrieve = TRUE, DataType = DBA_DATA_FRAME)
+count_cols <- grep("^N[0-9]$|^Met[0-9]$", colnames(cnt), value = TRUE)
+counts <- as.matrix(cnt[, count_cols])
+cat("count matrix class:", class(counts[1,1]), " head:\n")
+print(head(counts[, 1:4]))
+counts <- round(counts)  # ensure integer mode for DESeq2
+storage.mode(counts) <- "integer"
+colnames(counts) <- count_cols
+rownames(counts) <- paste0("peak_", seq_len(nrow(counts)))
+cat("Consensus peaks:", nrow(counts), "\n")
+
+coldata <- data.frame(
+  condition = factor(c("Normal","Normal","Normal","Normal","Met","Met","Met","Met"), levels = c("Normal","Met")),
+  patient   = factor(c("P1","P3","P4","P6","P1","P3","P4","P6")),
+  row.names = count_cols)
+stopifnot(all(colnames(counts) == rownames(coldata)))
+
+dds <- DESeqDataSetFromMatrix(countData = counts, colData = coldata,
+                              design = ~ patient + condition)
+dds <- DESeq(dds)
+res <- results(dds, contrast = c("condition", "Met", "Normal"), alpha = 0.05)
+res_df <- as.data.frame(res)
+res_df$chr <- as.character(cnt$CHR); res_df$start <- cnt$START; res_df$end <- cnt$END
+res_df$width <- res_df$end - res_df$start
+res_df <- res_df[, c("chr","start","end","width","baseMean","log2FoldChange","lfcSE","stat","pvalue","padj")]
+saveRDS(list(dds = dds, counts = counts, peaks = cnt, res = res_df),
+        "/workspace/atac/counts/dds_obj.rds")
+write.csv(res_df, "/workspace/atac/counts/DA_peaks_all.csv", row.names = FALSE)
+
+sig <- res_df[which(res_df$padj < 0.05 & abs(res_df$log2FoldChange) > 1 & !is.na(res_df$padj)), ]
+gained <- sig[sig$log2FoldChange > 0, ]
+lost   <- sig[sig$log2FoldChange < 0, ]
+cat("DA peaks (FDR<0.05, |FC|>2):", nrow(sig),
+    " gained:", nrow(gained), " lost:", nrow(lost), "\n")
+write.csv(sig,    "/workspace/atac/counts/DA_peaks_sig.csv",    row.names = FALSE)
+write.csv(gained, "/workspace/atac/counts/DA_peaks_gained.csv", row.names = FALSE)
+write.csv(lost,   "/workspace/atac/counts/DA_peaks_lost.csv",   row.names = FALSE)
+```
+
+## PCA
+
+```{r}
+suppressPackageStartupMessages(library(ggplot2))
+suppressPackageStartupMessages(library(DESeq2))
+suppressPackageStartupMessages(library(ComplexHeatmap))
+suppressPackageStartupMessages(library(circlize))
+
+obj <- readRDS("/workspace/atac/counts/dds_obj.rds")
+res <- obj$res
+dds <- obj$dds
+counts <- obj$counts
+
+pal <- c("Normal" = "#0279EE", "Tumor-associated" = "#FF9400")
+res$direction <- ifelse(is.na(res$padj) | res$padj >= 0.05 | abs(res$log2FoldChange) <= 1, "NS",
+                        ifelse(res$log2FoldChange > 0, "Gained in Met", "Lost in Met"))
+res$direction <- factor(res$direction, levels = c("Gained in Met", "Lost in Met", "NS"))
+
+# Volcano
+res$lab <- -log10(pmax(res$padj, 1e-300))
+p <- ggplot(res, aes(x = log2FoldChange, y = lab, color = direction)) +
+  geom_point(size = 0.4, alpha = 0.5) +
+  scale_color_manual(values = c("Gained in Met" = "#FF9400", "Lost in Met" = "#0279EE", "NS" = "grey75"),
+                     name = NULL) +
+  geom_hline(yintercept = -log10(0.05), linetype = "dashed", color = "grey40") +
+  geom_vline(xintercept = c(-1, 1), linetype = "dashed", color = "grey40") +
+  labs(x = "log2 fold change (Met / Normal)", y = "-log10 FDR",
+       title = "Differential accessibility: tumor-associated vs normal vessel") +
+  theme_classic(base_family = "Liberation Sans") + theme(legend.position = "bottom")
+ggsave("/mnt/results/atac_vessel_analysis/DA_peaks/volcano_DA_peaks.svg", p, width = 6, height = 5)
+ggsave("/workspace/atac/volcano.png", p, width = 6, height = 5, dpi = 150)
+
+# MA
+p <- ggplot(res, aes(x = log2(baseMean + 1), y = log2FoldChange, color = direction)) +
+  geom_point(size = 0.4, alpha = 0.5) +
+  scale_color_manual(values = c("Gained in Met" = "#FF9400", "Lost in Met" = "#0279EE", "NS" = "grey75"), name = NULL) +
+  geom_hline(yintercept = 0, color = "grey30") +
+  labs(x = "log2 mean accessibility", y = "log2 fold change (Met / Normal)") +
+  theme_classic(base_family = "Liberation Sans") + theme(legend.position = "bottom")
+ggsave("/mnt/results/atac_vessel_analysis/DA_peaks/MA_DA_peaks.svg", p, width = 6, height = 5)
+
+# PCA on VST-transformed counts (all peaks)
+vsd <- vst(dds)
+pca <- plotPCA(vsd, intgroup = c("condition", "patient"), returnData = TRUE)
+pv <- round(100 * attr(pca, "percentVar"))
+pd <- data.frame(pca[, c("PC1","PC2")], group = ifelse(grepl("^Met", rownames(pca)), "Tumor-associated", "Normal"))
+p <- ggplot(pd, aes(x = PC1, y = PC2, color = group, label = rownames(pd))) +
+  geom_point(size = 3) + geom_text(vjust = -0.8, size = 3, family = "Liberation Sans", show.legend = FALSE) +
+  scale_color_manual(values = pal, name = NULL) +
+  coord_fixed() +
+  labs(x = paste0("PC1 (", pv[1], "%)"), y = paste0("PC2 (", pv[2], "%)")) +
+  theme_classic(base_family = "Liberation Sans") + theme(legend.position = "bottom")
+ggsave("/mnt/results/atac_vessel_analysis/QC_report/PCA_samples.svg", p, width = 5.5, height = 5)
+ggsave("/workspace/atac/PCA.png", p, width = 5.5, height = 5, dpi = 150)
+
+```

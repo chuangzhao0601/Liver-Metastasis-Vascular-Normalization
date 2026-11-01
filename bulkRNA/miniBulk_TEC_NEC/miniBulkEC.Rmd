@@ -1,0 +1,228 @@
+---
+title: "miniBulk_EC"
+author: "Lin Tian"
+date: "5/2/2024"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+## Load Packages, Data and PCA Plot
+
+```{r}
+setwd("~/miniBulk_EC")
+library(ggplot2)
+library(genefilter)
+
+load("EC.RNAseq.Manuscript.RData")
+
+rowVariance_combine <- rowVars(EC.TPM.gene)
+names(rowVariance_combine) <- rownames(EC.TPM.gene)
+rowVariance_combine <- rowVariance_combine[!grepl("^Rp|^mt-|^Gm", names(rowVariance_combine))]
+selected_Rows_combine <- names(sort(rowVariance_combine, decreasing = T)[1:1000])
+cx_combine <- sweep(t(EC.TPM.gene[selected_Rows_combine, ]), 2, colMeans(t(EC.TPM.gene[selected_Rows_combine, ])))
+sv_combine <- svd(cx_combine)
+sv_combine$d^2/sum(sv_combine$d^2) # variance explained
+HTseq.EC.ann$PC1_TPM <- sv_combine$u[,1]
+HTseq.EC.ann$PC2_TPM <- sv_combine$u[,2]
+
+combine_EC_pca <- ggplot(HTseq.EC.ann) + geom_point(aes(x=PC1_TPM, y=PC2_TPM, fill=Tissue, shape=TumorModel), colour="#000000", size=6) + scale_fill_manual(values=c("#AC0000","#AC0000", "#57A5E5")) + scale_shape_manual(values=c(21,22)) + theme_bw() + theme(panel.grid.major=element_blank(), panel.grid.minor=element_blank(), panel.border=element_blank(), axis.line.x=element_line(colour="black"), axis.line.y=element_line(colour="black")) + coord_fixed(ratio=2.621423/4.82307)
+ggsave("~/combine_EC_pca_2.pdf", combine_EC_pca, width=6.28, height=6.28, units="in", useDingbats=FALSE)
+```
+
+## Visualize EC signature gene expression
+
+```{r}
+library(RColorBrewer)
+library(pheatmap)
+EC_sig1 <- read.csv("EC_signatures.csv", header=TRUE, stringsAsFactors=FALSE)
+EC_sig1$Gene <- paste0(substr(EC_sig1$Gene, 1, 1), tolower(substr(EC_sig1$Gene, 2, nchar(EC_sig1$Gene))))
+EC_sig1 <- EC_sig1[EC_sig1$Gene %in% rownames(EC.TPM.gene), ]
+
+EC_sig2 <- read.csv("EC_signatures2.csv", header=TRUE, stringsAsFactors=FALSE)
+EC_sig2$Gene <- paste0(substr(EC_sig2$Gene, 1, 1), tolower(substr(EC_sig2$Gene, 2, nchar(EC_sig2$Gene))))
+EC_sig2 <- EC_sig2[EC_sig2$Gene %in% rownames(EC.TPM.gene), ]
+
+LSCE_genes <- intersect(EC_sig1$Gene[EC_sig1$Group=="LSEC"], EC_sig2$Gene[EC_sig2$Group=="LSEC"])
+Immune_genes <- intersect(EC_sig1$Gene[EC_sig1$Group=="Inflammatory-related"], EC_sig2$Gene[EC_sig2$Group=="Immunomudulation"])
+
+color_pal <- c(rep("#4575B4", 10), colorRampPalette(rev(brewer.pal(n=7, name="RdYlBu")))(80), rep("#D73027", 10))
+pheatmap(EC.TPM.gene[LSCE_genes, HTseq.EC.ann$TumorModel=="LvMet"], scale = "row", clustering_distance_rows="correlation", clustering_distance_cols="correlation")
+pheatmap(EC.TPM.gene[LSCE_genes, HTseq.EC.ann$TumorModel=="HCC"], scale = "row", clustering_distance_rows="correlation", clustering_distance_cols="correlation")
+pheatmap(t(EC.TPM.gene[LSCE_genes, ]), scale = "column", clustering_distance_rows="correlation", clustering_distance_cols="correlation")
+
+pheatmap(EC.TPM.gene[Immune_genes, HTseq.EC.ann$TumorModel=="LvMet"], scale = "row", clustering_distance_rows="correlation", clustering_distance_cols="correlation")
+pheatmap(EC.TPM.gene[Immune_genes, HTseq.EC.ann$TumorModel=="HCC"], scale = "row", clustering_distance_rows="correlation", clustering_distance_cols="correlation")
+pheatmap(EC.TPM.gene[Immune_genes, ], scale = "row", clustering_distance_rows="correlation", clustering_distance_cols="correlation")
+
+
+pheatmap(EC.TPM.gene[EC_sig$Gene, HTseq.EC.ann$TumorModel=="HCC"], scale = "row", annotation_row=data.frame(GeneClass=EC_sig$Group), annotation_colors=list(GeneClass=c(`LSEC`="#000000", `ECM-related`="#555555", `ECM-related`="#999999")))
+```
+
+## Visualize certain genes
+
+```{r}
+library(pheatmap)
+pheatmap(log2(EC.TPM.gene[c("Lyve1", "Stab1", "F8", "Clec4g", "Stab2", "Itga6", "Sparc", "Lamb1", "Lamc1", "Esm1"), c(1,3,5,7,9,11,6,8,12,2,4,10)]+1), scale = "row", cluster_rows=FALSE, cluster_cols=FALSE)
+```
+
+
+## Gene Ontology
+
+```{r}
+library(DESeq2)
+library(limma)
+library(clusterProfiler)
+library(ggplot2)
+library(RColorBrewer)
+library(ggrepel)
+library(gghalves)
+
+sample_vector <- list.files("HTseq_count/") ## Modify DIR
+template.data <- read.delim(paste0("HTseq_count/", HTseq.EC.ann$fileName[1]), row.names=1, header=FALSE)
+
+EC.HTseq <- matrix(NA, nrow=nrow(template.data), ncol=length(sample_vector), dimnames=list(rownames(template.data), HTseq.EC.ann$shortName))
+
+for(i in 1:length(sample_vector)) {
+  file_i <- read.delim(paste0("HTseq_count/", HTseq.EC.ann$fileName[i]), row.names=1, header=FALSE)
+  print(all.equal(rownames(template.data), rownames(file_i)))
+  if (all.equal(rownames(template.data), rownames(file_i))) {
+    EC.HTseq[, HTseq.EC.ann$shortName[i]] <- file_i[, "V2"]
+  }
+}
+
+rownames(EC.HTseq) <- sub("\\..+", "", rownames(EC.HTseq))
+
+ID_convert <- read.table("Ensembl_Gene_Converter.txt", header=TRUE, stringsAsFactors=FALSE)
+
+sample.probe.ms <- rownames(EC.HTseq)[rownames(EC.HTseq) %in% ID_convert$ensembl_ID]
+ID_convert <- ID_convert[ID_convert$ensembl_ID %in% sample.probe.ms, ]
+genenames.ms <- unique(ID_convert$mgi_symbol[ID_convert$ensembl_ID %in% sample.probe.ms])
+
+
+EC.HTseq.gene <- matrix(NA, nrow=length(genenames.ms), ncol=ncol(EC.HTseq), dimnames = list(genenames.ms, colnames(EC.HTseq)))
+
+
+for(g in genenames.ms) {
+  probes <- as.character(ID_convert$ensembl_ID[ID_convert$mgi_symbol==g])
+  if(length(probes)==1) {
+    EC.HTseq.gene[g, ] <- EC.HTseq[probes, ]
+  }
+  else{
+    EC.HTseq.gene[g, ] <- apply(EC.HTseq[probes, ], 2, max)
+  }
+}
+
+
+EC.HTseq.dds <- DESeqDataSetFromMatrix(EC.HTseq.gene, colData=HTseq.EC.ann, design= ~ Tissue2)
+EC.HTseq.dds <- DESeq(EC.HTseq.dds)
+
+EC.HTseq.rld <- rlog(EC.HTseq.dds)
+
+plotPCA(EC.HTseq.rld, intgroup=c("TumorModel", "Tissue"))
+```
+
+## Differential Gene Expression Analysis
+
+```{r}
+library(DESeq2)
+library(limma)
+library(clusterProfiler)
+library(ggplot2)
+library(RColorBrewer)
+library(ggrepel)
+library(gghalves)
+
+load("~/miniBulk_EC/EC.miniBulkRNAseq.RData")
+EC.HTseq.rld <- rlog(EC.HTseq.dds)
+
+PROJECT.design <- model.matrix(~ 1 + Tissue2, data=HTseq.EC.ann)
+
+# PROJECT.fitlimma <- lmFit(log2(EC.TPM.gene+1), PROJECT.design)
+PROJECT.fitlimma <- lmFit(log2(EC.TPM.gene+1), PROJECT.design)
+PROJECT.fitbayes <- eBayes(PROJECT.fitlimma)
+DE_gene_table <- topTable(PROJECT.fitbayes, adjust="BH", number=nrow(EC.TPM.gene))
+
+DE_gene_table["Esm1",]
+```
+
+## GSEA
+
+```{r}
+library(enrichplot)
+library(org.Mm.eg.db)
+
+geneList <- DE_gene_table$logFC
+names(geneList) <- rownames(DE_gene_table)
+geneList <- sort(geneList, decreasing = TRUE)
+
+EC_gseGO <- gseGO(geneList=geneList, keyType="SYMBOL", OrgDb=org.Mm.eg.db, ont="BP", minGSSize=10, maxGSSize=1000, pvalueCutoff=0.05, eps=0, verbose=FALSE)
+View(EC_gseGO@result)
+
+gseaplot2(EC_gseGO, geneSetID = "GO:0002866", color = "#E495A5", ES_geom = "dot")
+
+save(EC.HTseq.dds, EC.HTseq.gene, file="EC.DEseq.RData")
+```
+
+## Over-representative analysis
+
+```{r}
+## Mouse
+TEC_Up <- filter(DE_gene_table, logFC > 2)
+NEC_Up <- filter(DE_gene_table, logFC < -2)
+
+## GO
+TEC_enrichGO <- enrichGO(gene=rownames(TEC_Up), keyType="SYMBOL", OrgDb=org.Mm.eg.db, ont="BP", pAdjustMethod="BH", pvalueCutoff=0.01, qvalueCutoff=0.05)
+View(TEC_enrichGO@result)
+
+NEC_enrichGO <- enrichGO(gene=rownames(NEC_Up), keyType="SYMBOL", OrgDb=org.Mm.eg.db, ont="BP", pAdjustMethod="BH", pvalueCutoff=0.01, qvalueCutoff=0.05)
+View(NEC_enrichGO@result)
+
+```
+
+## Signature Based
+
+```{r}
+## PMID: 31292543
+## A human liver cell atlas reveals heterogeneity and epithelial progenitors
+
+Aizarani_ms <- read.csv("EC_signatures.csv")
+Aizarani_ms$Gene <- paste0(substr(Aizarani_hu$Gene, 1, 1), tolower(substr(Aizarani_hu$Gene, 2, nchar(Aizarani_hu$Gene))))
+
+Aizarani_ms <- Aizarani_ms[Aizarani_ms$Gene %in% rownames(EC.TPM.gene), ]
+
+HTseq.EC.ann$Aizarani_Angiogenesis <- apply(EC.TPM.gene[Aizarani_ms$Gene[Aizarani_ms$Cluster == "EC_06_KDR_ESM1"], ], 2, sum)
+HTseq.EC.ann$Aizarani_ECM <- apply(EC.TPM.gene[Aizarani_ms$Gene[Aizarani_ms$Cluster == "EC_03_TFF3"], ], 2, sum)
+HTseq.EC.ann$Aizarani_inflammation1 <- apply(EC.TPM.gene[Aizarani_ms$Gene[Aizarani_ms$Cluster == "EC_04_ACKR1"], ], 2, sum)
+HTseq.EC.ann$Aizarani_inflammation2 <- apply(EC.TPM.gene[Aizarani_ms$Gene[Aizarani_ms$Cluster == "EC_09_PLCG2"], ], 2, sum)
+HTseq.EC.ann$Aizarani_LSEC <- apply(EC.TPM.gene[Aizarani_ms$Gene[Aizarani_ms$Cluster == "EC_01_CLEC4A"], ], 2, sum)
+
+ggplot(HTseq.EC.ann) + geom_point(aes(x=Tissue2, y=Aizarani_LSEC, fill=Tissue, shape=TumorModel), colour="#000000", size=6) + scale_fill_manual(values=c("#AC0000","#AC0000", "#57A5E5")) + scale_shape_manual(values=c(21,22)) + theme_bw() + theme(panel.grid.major=element_blank(), panel.grid.minor=element_blank(), panel.border=element_blank(), axis.line.x=element_line(colour="black"), axis.line.y=element_line(colour="black"))
+
+ggplot(HTseq.EC.ann) + geom_point(aes(x=Tissue2, y=Aizarani_ECM, fill=Tissue, shape=TumorModel), colour="#000000", size=6) + scale_fill_manual(values=c("#AC0000","#AC0000", "#57A5E5")) + scale_shape_manual(values=c(21,22)) + theme_bw() + theme(panel.grid.major=element_blank(), panel.grid.minor=element_blank(), panel.border=element_blank(), axis.line.x=element_line(colour="black"), axis.line.y=element_line(colour="black"))
+
+ggplot(HTseq.EC.ann) + geom_point(aes(x=Tissue2, y=Aizarani_inflammation1, fill=Tissue, shape=TumorModel), colour="#000000", size=6) + scale_fill_manual(values=c("#AC0000","#AC0000", "#57A5E5")) + scale_shape_manual(values=c(21,22)) + theme_bw() + theme(panel.grid.major=element_blank(), panel.grid.minor=element_blank(), panel.border=element_blank(), axis.line.x=element_line(colour="black"), axis.line.y=element_line(colour="black"))
+
+ggplot(HTseq.EC.ann) + geom_point(aes(x=Tissue2, y=Aizarani_inflammation2, fill=Tissue, shape=TumorModel), colour="#000000", size=6) + scale_fill_manual(values=c("#AC0000","#AC0000", "#57A5E5")) + scale_shape_manual(values=c(21,22)) + theme_bw() + theme(panel.grid.major=element_blank(), panel.grid.minor=element_blank(), panel.border=element_blank(), axis.line.x=element_line(colour="black"), axis.line.y=element_line(colour="black"))
+
+ggplot(HTseq.EC.ann) + geom_point(aes(x=Tissue2, y=Aizarani_Angiogenesis, fill=Tissue, shape=TumorModel), colour="#000000", size=6) + scale_fill_manual(values=c("#AC0000","#AC0000", "#57A5E5")) + scale_shape_manual(values=c(21,22)) + theme_bw() + theme(panel.grid.major=element_blank(), panel.grid.minor=element_blank(), panel.border=element_blank(), axis.line.x=element_line(colour="black"), axis.line.y=element_line(colour="black"))
+
+## PMID: 31597160
+## Resolving the fibrotic niche of human liver cirrhosis at single-cell level
+
+Ramachandran_ms <- read.csv("EC_signatures2.csv")
+Ramachandran_ms$Gene <- paste0(substr(Ramachandran_hu$Gene, 1, 1), tolower(substr(Ramachandran_hu$Gene, 2, nchar(Ramachandran_hu$Gene))))
+
+Ramachandran_ms <- Ramachandran_ms[Ramachandran_ms$Gene %in% rownames(EC.TPM.gene), ]
+
+HTseq.EC.ann$Ramachandran_ECM <- apply(EC.TPM.gene[Ramachandran_ms$Gene[Ramachandran_ms$Group == "ECM organization"], ], 2, sum)
+HTseq.EC.ann$Ramachandran_Immune <- apply(EC.TPM.gene[Ramachandran_ms$Gene[Ramachandran_ms$Group == "Immunomudulation"], ], 2, sum)
+HTseq.EC.ann$Ramachandran_LSEC <- apply(EC.TPM.gene[Ramachandran_ms$Gene[Ramachandran_ms$Group == "LSEC"], ], 2, sum)
+
+ggplot(HTseq.EC.ann) + geom_point(aes(x=Tissue2, y=Ramachandran_LSEC, fill=Tissue, shape=TumorModel), colour="#000000", size=6) + scale_fill_manual(values=c("#AC0000","#AC0000", "#57A5E5")) + scale_shape_manual(values=c(21,22)) + theme_bw() + theme(panel.grid.major=element_blank(), panel.grid.minor=element_blank(), panel.border=element_blank(), axis.line.x=element_line(colour="black"), axis.line.y=element_line(colour="black"))
+
+ggplot(HTseq.EC.ann) + geom_point(aes(x=Tissue2, y=Ramachandran_ECM, fill=Tissue, shape=TumorModel), colour="#000000", size=6) + scale_fill_manual(values=c("#AC0000","#AC0000", "#57A5E5")) + scale_shape_manual(values=c(21,22)) + theme_bw() + theme(panel.grid.major=element_blank(), panel.grid.minor=element_blank(), panel.border=element_blank(), axis.line.x=element_line(colour="black"), axis.line.y=element_line(colour="black"))
+
+ggplot(HTseq.EC.ann) + geom_point(aes(x=Tissue2, y=Ramachandran_Immune, fill=Tissue, shape=TumorModel), colour="#000000", size=6) + scale_fill_manual(values=c("#AC0000","#AC0000", "#57A5E5")) + scale_shape_manual(values=c(21,22)) + theme_bw() + theme(panel.grid.major=element_blank(), panel.grid.minor=element_blank(), panel.border=element_blank(), axis.line.x=element_line(colour="black"), axis.line.y=element_line(colour="black"))
+```
+

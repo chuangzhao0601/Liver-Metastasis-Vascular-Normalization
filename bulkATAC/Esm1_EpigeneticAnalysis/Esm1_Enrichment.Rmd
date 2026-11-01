@@ -1,0 +1,81 @@
+---
+title: "Esm1_Enrichment"
+author: "Lin Tian"
+date: "2026-06-01"
+output: html_document
+---
+
+```{r}
+suppressPackageStartupMessages(library(ChIPseeker))
+suppressPackageStartupMessages(library(clusterProfiler))
+suppressPackageStartupMessages(library(org.Mm.eg.db))
+suppressPackageStartupMessages(library(TxDb.Mmusculus.UCSC.mm10.knownGene))
+suppressPackageStartupMessages(library(GenomicRanges))
+suppressPackageStartupMessages(library(ggplot2))
+
+outdir <- "/mnt/results/atac_vessel_analysis/enrichment"
+txdb <- TxDb.Mmusculus.UCSC.mm10.knownGene
+
+mkgr <- function(f) {
+  x <- read.csv(f)
+  GRanges(x$chr, IRanges(x$start, x$end))
+}
+gained <- mkgr("/workspace/atac/counts/DA_peaks_gained.csv")
+lost   <- mkgr("/workspace/atac/counts/DA_peaks_lost.csv")
+```
+
+## Annotation
+
+```{r}
+ann_g <- annotatePeak(gained, tssRegion = c(-2000, 2000), TxDb = txdb,
+                      level = "gene", annoDb = "org.Mm.eg.db")
+ann_l <- annotatePeak(lost, tssRegion = c(-2000, 2000), TxDb = txdb,
+                      level = "gene", annoDb = "org.Mm.eg.db")
+write.csv(as.data.frame(ann_g), file.path(outdir, "annotation_gained_peaks.csv"), row.names = FALSE)
+write.csv(as.data.frame(ann_l), file.path(outdir, "annotation_lost_peaks.csv"), row.names = FALSE)
+
+# promoter vs distal composition plot
+comp <- rbind(
+  data.frame(group = "Gained in Met", table(as.data.frame(ann_g)$annotation)),
+  data.frame(group = "Lost in Met", table(as.data.frame(ann_l)$annotation)))
+colnames(comp)[2] <- "feature"
+comp$feature <- gsub("\\s*\\(.*\\)", "", comp$feature)
+p <- ggplot(comp, aes(x = group, y = Freq, fill = feature)) +
+  geom_col(position = "fill", width = 0.6) +
+  scale_y_continuous(labels = scales::percent) +
+  scale_fill_brewer(palette = "Set2", name = NULL) +
+  labs(x = NULL, y = "Fraction of DA peaks") +
+  theme_classic(base_family = "Liberation Sans") + theme(legend.position = "right")
+ggsave(file.path(outdir, "peak_annotation_composition.svg"), p, width = 7, height = 4.5)
+```
+
+
+## Gene extraction (nearest + promoter genes)
+
+```{r}
+get_genes <- function(ann) {
+  d <- as.data.frame(ann)
+  unique(unique(d$geneId), unique(d$nearest_gene))
+}
+gains_genes <- get_genes(ann_g)
+lost_genes  <- get_genes(ann_l)
+cat("gained genes:", length(gains_genes), " lost genes:", length(lost_genes), "\n")
+```
+
+## Enrichment
+
+```{r}
+ego_g <- enrichGO(gains_genes, OrgDb = org.Mm.eg.db, keyType = "ENTREZID",
+                  ont = "BP", pAdjustMethod = "BH", pvalueCutoff = 0.05, readable = TRUE)
+ego_l <- enrichGO(lost_genes, OrgDb = org.Mm.eg.db, keyType = "ENTREZID",
+                  ont = "BP", pAdjustMethod = "BH", pvalueCutoff = 0.05, readable = TRUE)
+write.csv(as.data.frame(ego_g), file.path(outdir, "GO_BP_gained.csv"), row.names = FALSE)
+write.csv(as.data.frame(ego_l), file.path(outdir, "GO_BP_lost.csv"), row.names = FALSE)
+
+kk_g <- enrichKEGG(gains_genes, organism = "mmu", pvalueCutoff = 0.05)
+kk_l <- enrichKEGG(lost_genes, organism = "mmu", pvalueCutoff = 0.05)
+if (nrow(as.data.frame(kk_g))) write.csv(as.data.frame(kk_g), file.path(outdir, "KEGG_gained.csv"), row.names = FALSE)
+if (nrow(as.data.frame(kk_l))) write.csv(as.data.frame(kk_l), file.path(outdir, "KEGG_lost.csv"), row.names = FALSE)
+```
+
+

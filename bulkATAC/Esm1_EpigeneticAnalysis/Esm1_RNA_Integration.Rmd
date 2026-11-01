@@ -1,0 +1,559 @@
+---
+title: "Esm1_RNA_Integration"
+author: "Lin Tian"
+date: "2026-06-01"
+output: html_document
+---
+
+## Promoter-centered ATAC x H3K4me3 integration
+
+```{r}
+suppressPackageStartupMessages(library(GenomicRanges))
+suppressPackageStartupMessages(library(ChIPseeker))
+suppressPackageStartupMessages(library(TxDb.Mmusculus.UCSC.mm10.knownGene))
+suppressPackageStartupMessages(library(org.Mm.eg.db))
+suppressPackageStartupMessages(library(clusterProfiler))
+suppressPackageStartupMessages(library(ggplot2))
+
+outdir <- "/mnt/results/atac_vessel_analysis/enrichment"
+txdb <- TxDb.Mmusculus.UCSC.mm10.knownGene
+
+mkgr <- function(f) { x <- read.csv(f); GRanges(x$chr, IRanges(x$start, x$end)) }
+gained <- mkgr("/workspace/atac/counts/DA_peaks_gained.csv")
+lost   <- mkgr("/workspace/atac/counts/DA_peaks_lost.csv")
+h3k_g  <- mkgr("/workspace/atac/counts/H3K4me3_gained.csv")
+h3k_l  <- mkgr("/workspace/atac/counts/H3K4me3_lost.csv")
+h3k_all <- mkgr("/workspace/atac/counts/H3K4me3_regions_all.csv")
+```
+
+## 1. ATAC DA peaks: promoter (H3K4me3-marked) vs enhancer (unmarked)
+
+```{r}
+cls <- function(gr) {
+  f <- rep("Enhancer (H3K4me3-negative)", length(gr))
+  f[countOverlaps(gr, h3k_all) > 0] <- "Promoter (H3K4me3-marked)"
+  f
+}
+comp <- rbind(
+  data.frame(direction = "Gained in Met", class = cls(gained)),
+  data.frame(direction = "Lost in Met", class = cls(lost)))
+p <- ggplot(comp, aes(x = direction, fill = class)) +
+  geom_bar(position = "fill", width = 0.55) +
+  scale_y_continuous(labels = scales::percent) +
+  scale_fill_manual(values = c("Promoter (H3K4me3-marked)" = "#FF9400",
+                               "Enhancer (H3K4me3-negative)" = "#0279EE"), name = NULL) +
+  labs(x = NULL, y = "Fraction of DA peaks",
+       title = "ATAC DA peaks: H3K4me3-marked promoters vs enhancers") +
+  theme_classic(base_family = "Liberation Sans") + theme(legend.position = "bottom")
+ggsave(file.path(outdir, "ATAC_DA_promoter_vs_enhancer_H3K4me3.svg"), p, width = 6, height = 4.5)
+print(table(comp$direction, comp$class))
+```
+
+## 2. Promoter classes: accessibility x H3K4me3 change
+
+```{r}
+# promoters = +/-2kb TSS
+prom <- promoters(txdb, upstream = 2000, downstream = 2000)
+prom <- reduce(prom)
+std <- paste0("chr", c(1:19, "X", "Y"))
+prom <- prom[as.character(seqnames(prom)) %in% std]
+# map each promoter to nearest gene (annoDb triggers an org.db coercion bug
+# in this ChIPseeker version; map symbols manually afterwards)
+ann_prom <- annotatePeak(prom, tssRegion = c(-2000, 2000), TxDb = txdb, level = "gene")
+ann_df <- as.data.frame(ann_prom)
+sym_map <- AnnotationDbi::select(org.Mm.eg.db, keys = as.character(ann_df$geneId),
+                                 keytype = "ENTREZID", columns = "SYMBOL")
+sym_map <- sym_map[!duplicated(sym_map$ENTREZID), ]
+ann_df$SYMBOL <- sym_map$SYMBOL[match(as.character(ann_df$geneId), sym_map$ENTREZID)]
+prom_gr <- prom
+gene_id <- ann_df$geneId
+gene_sym <- ann_df$SYMBOL
+
+acc_g <- countOverlaps(prom_gr, gained) > 0
+acc_l <- countOverlaps(prom_gr, lost) > 0
+h3g   <- countOverlaps(prom_gr, h3k_g) > 0
+h3l   <- countOverlaps(prom_gr, h3k_l) > 0
+
+prom_class <- rep("No change", length(prom_gr))
+prom_class[acc_g & !acc_l] <- "Accessibility gained"
+prom_class[acc_l & !acc_g] <- "Accessibility lost"
+prom_class[acc_g & acc_l]  <- "Mixed accessibility"
+# refine with H3K4me3
+prom_class[acc_g & h3g] <- "Activated promoter (acc+ H3K4me3+)"
+prom_class[acc_l & h3l] <- "Repressed promoter (acc- H3K4me3-)"
+prom_class[acc_g & h3l] <- "Primed enhancer-like (acc+ H3K4me3-)"
+prom_class[acc_l & h3g] <- "Poised (acc- H3K4me3+)"
+
+res_prom <- data.frame(chr = seqnames(prom_gr), start = start(prom_gr), end = end(prom_gr),
+                       geneId = gene_id, SYMBOL = gene_sym, class = prom_class)
+write.csv(res_prom, file.path(outdir, "promoter_integration_classes.csv"), row.names = FALSE)
+print(table(prom_class))
+```
+
+
+## 3. GO BP on activated vs repressed promoter genes
+
+```{r}
+act_genes <- unique(na.omit(gene_id[prom_class == "Activated promoter (acc+ H3K4me3+)"]))
+rep_genes <- unique(na.omit(gene_id[prom_class == "Repressed promoter (acc- H3K4me3-)"]))
+cat("activated promoter genes:", length(act_genes), " repressed:", length(rep_genes), "\n")
+```
+
+## 4. Integration visualizations: Venn diagrams + quadrant scatter
+
+```{r}
+prom <- read.csv("/mnt/results/atac_vessel_analysis/enrichment/promoter_integration_classes.csv")
+atac <- readRDS("/workspace/atac/counts/dds_obj.rds")
+ct   <- readRDS("/workspace/atac/counts/ct_dds_obj.rds")
+
+mkgr <- function(df) GRanges(df$chr, IRanges(df$start, df$end))
+prom_gr <- mkgr(prom)
+atac_res <- atac$res; ct_res <- ct$res
+atac_gr <- mkgr(atac_res); ct_gr <- mkgr(ct_res)
+
+# per-promoter log2FC + padj from overlapping consensus peak/region (max |log2FC|)
+pick_lfc <- function(prom_gr, res_gr, lfc, padj) {
+  out_lfc <- rep(NA_real_, length(prom_gr))
+  out_p <- rep(NA_real_, length(prom_gr))
+  hits <- findOverlaps(prom_gr, res_gr)
+  if (length(hits)) {
+    d <- data.frame(q = queryHits(hits), lfc = lfc[subjectHits(hits)],
+                    p = padj[subjectHits(hits)])
+    d$abs <- abs(d$lfc)
+    best <- d[order(d$q, -d$abs), ]
+    best <- best[!duplicated(best$q), ]
+    out_lfc[best$q] <- best$lfc
+    out_p[best$q] <- best$p
+  }
+  list(lfc = out_lfc, padj = out_p)
+}
+a <- pick_lfc(prom_gr, atac_gr, atac_res$log2FoldChange, atac_res$padj)
+c_ <- pick_lfc(prom_gr, ct_gr, ct_res$log2FoldChange, ct_res$padj)
+prom$atac_lfc <- a$lfc; prom$atac_padj <- a$padj
+prom$h3k_lfc <- c_$lfc; prom$h3k_padj <- c_$padj
+```
+
+## 5.Venn diagrams
+
+```{r}
+acc_g_genes <- unique(na.omit(prom$SYMBOL[grepl("gained", prom$class) & !is.na(prom$SYMBOL) &
+                                           prom$class %in% c("Accessibility gained", "Activated promoter (acc+ H3K4me3+)")]))
+h3g_genes   <- unique(na.omit(prom$SYMBOL[prom$class == "Activated promoter (acc+ H3K4me3+)"]))
+# proper sets: accessibility-gained promoters vs H3K4me3-gained promoters
+acc_g_set <- unique(na.omit(prom$SYMBOL[prom$class %in% c("Accessibility gained", "Activated promoter (acc+ H3K4me3+)")] ))
+h3g_set   <- unique(na.omit(prom$SYMBOL[prom$class %in% c("Activated promoter (acc+ H3K4me3+)", "Poised (acc- H3K4me3+)")]))
+
+acc_l_set <- unique(na.omit(prom$SYMBOL[prom$class %in% c("Accessibility lost", "Repressed promoter (acc- H3K4me3-)")] ))
+h3l_set   <- unique(na.omit(prom$SYMBOL[prom$class == "Repressed promoter (acc- H3K4me3-)"]))
+
+venn_g <- venn.diagram(list("ATAC promoter\nacc gain" = acc_g_set,
+                            "H3K4me3 promoter gain" = h3g_set),
+                       fill = c("#0279EE", "#FF9400"), alpha = 0.5, lwd = 0.5,
+                       cat.cex = 1.0, cex = 1.3, fontfamily = "Liberation Sans",
+                       cat.fontfamily = "Liberation Sans",
+                       cat.pos = c(-30, 10), cat.dist = c(0.05, 0.08),
+                       main = "Activated promoters (Met vs Normal)",
+                       main.fontfamily = "Liberation Sans", main.cex = 1.1,
+                       margin = 0.15, filename = NULL)
+svg(file.path(outdir, "INT_Venn_activated_promoters.svg"), width = 7, height = 5.5)
+grid.draw(venn_g); dev.off()
+
+venn_l <- venn.diagram(list("ATAC promoter\nacc loss" = acc_l_set,
+                            "H3K4me3 promoter loss" = h3l_set),
+                       fill = c("#0279EE", "#FF9400"), alpha = 0.5, lwd = 0.5,
+                       cat.cex = 1.0, cex = 1.3, fontfamily = "Liberation Sans",
+                       cat.fontfamily = "Liberation Sans",
+                       cat.pos = c(130, 0), cat.dist = c(0.06, 0.05),
+                       main = "Repressed promoters (Met vs Normal)",
+                       main.fontfamily = "Liberation Sans", main.cex = 1.1,
+                       margin = 0.15, filename = NULL)
+svg(file.path(outdir, "INT_Venn_repressed_promoters.svg"), width = 7, height = 5.5)
+grid.draw(venn_l); dev.off()
+
+cat("Venn activated: acc-gain", length(acc_g_set), " h3k-gain", length(h3g_set),
+    " overlap", length(intersect(acc_g_set, h3g_set)), "\n")
+cat("Venn repressed: acc-loss", length(acc_l_set), " h3k-loss", length(h3l_set),
+    " overlap", length(intersect(acc_l_set, h3l_set)), "\n")
+```
+
+## 6. Quadrant scatter (significance-aware: DA = FDR<0.05 & |FC|>2)
+
+```{r}
+d <- prom[!is.na(prom$atac_lfc) & !is.na(prom$h3k_lfc), ]
+da_a <- !is.na(d$atac_padj) & d$atac_padj < 0.05 & abs(d$atac_lfc) > 1
+da_h <- !is.na(d$h3k_padj) & d$h3k_padj < 0.05 & abs(d$h3k_lfc) > 1
+d$quad <- "Not significant"
+d$quad[da_a & da_h & d$atac_lfc > 0 & d$h3k_lfc > 0] <- "Activated (acc+ H3K4me3+)"
+d$quad[da_a & da_h & d$atac_lfc < 0 & d$h3k_lfc < 0] <- "Repressed (acc- H3K4me3-)"
+d$quad[da_a & d$atac_lfc > 0 & !(da_h & d$h3k_lfc > 0)] <- "Accessibility gained only"
+d$quad[da_a & d$atac_lfc < 0 & !(da_h & d$h3k_lfc < 0)] <- "Accessibility lost only"
+d$quad[!da_a & da_h & d$h3k_lfc > 0] <- "H3K4me3 gained only"
+d$quad[!da_a & da_h & d$h3k_lfc < 0] <- "H3K4me3 lost only"
+cat("quadrant counts (promoters with both measurements):", nrow(d), "\n")
+print(table(d$quad))
+
+pal <- c("Activated (acc+ H3K4me3+)" = "#FF9400", "Repressed (acc- H3K4me3-)" = "#0279EE",
+         "Accessibility gained only" = "#75A025", "Accessibility lost only" = "#0279EE",
+         "H3K4me3 gained only" = "#FD9BED", "H3K4me3 lost only" = "#E9ED4C",
+         "Not significant" = "grey85")
+p <- ggplot(d, aes(x = atac_lfc, y = h3k_lfc, color = quad)) +
+  geom_point(size = 0.8, alpha = 0.6) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "grey40") +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "grey40") +
+  scale_color_manual(values = pal, name = NULL) +
+  labs(x = "ATAC accessibility change (log2FC, Met vs Normal)",
+       y = "H3K4me3 change (log2FC, Met vs Normal)",
+       title = "Promoter-level integration: accessibility vs H3K4me3") +
+  theme_classic(base_family = "Liberation Sans") +
+  theme(legend.position = "bottom", legend.text = element_text(size = 9))
+ggsave(file.path(outdir, "INT_quadrant_promoters.svg"), p, width = 8.5, height = 6)
+
+write.csv(d[, c("chr","start","end","SYMBOL","class","atac_lfc","h3k_lfc","quad")],
+          file.path(outdir, "INT_promoter_quadrant_table.csv"), row.names = FALSE)
+```
+
+## 7.marker_heatmap
+
+```{r}
+# Per-sample promoter signals (ATAC + H3K4me3) for the 18 RNA-seq marker genes.
+# Promoter = consensus peaks within +/-2 kb of the gene TSS (TxDb mm10).
+# Values: log2 size-factor-normalized counts, z-scored per row.
+
+suppressPackageStartupMessages({
+  library(DESeq2); library(ComplexHeatmap); library(circlize); library(svglite)
+  library(TxDb.Mmusculus.UCSC.mm10.knownGene); library(org.Mm.eg.db); library(AnnotationDbi)
+})
+setwd("/workspace/atac")
+outdir <- "/mnt/results/atac_vessel_analysis/RNA_crosscheck"
+
+mk <- read.csv(file.path(outdir, "RNA_marker_DE.csv"))
+markers <- mk$SYMBOL
+
+# TSS per marker from TxDb
+txdb <- TxDb.Mmusculus.UCSC.mm10.knownGene
+eg <- AnnotationDbi::select(org.Mm.eg.db, keys = markers, keytype = "SYMBOL", columns = "ENTREZID")
+eg <- eg[!duplicated(eg$SYMBOL), ]
+g <- genes(txdb)
+g <- g[g$gene_id %in% eg$ENTREZID]
+mtoeg <- setNames(eg$ENTREZID, eg$SYMBOL)
+
+tss_df <- data.frame(chr = seqnames(g), gene_id = as.character(g$gene_id), stringsAsFactors = FALSE)
+tss_df$SYMBOL <- names(mtoeg)[match(tss_df$gene_id, mtoeg)]
+tss_df <- tss_df[tss_df$SYMBOL %in% markers, ]
+
+get_z <- function(obj_path, label) {
+  d <- readRDS(obj_path); dd <- d$dds; pk <- d$peaks
+  gr <- GenomicRanges::GRanges(pk$CHR, IRanges::IRanges(pk$START, pk$END))
+  tg <- GenomicRanges::GRanges(tss_df$chr, IRanges::IRanges(rep(0, nrow(tss_df)), rep(0, nrow(tss_df))), gene = tss_df$SYMBOL)
+  # promoter window per gene: use genes() TSS +/- 2kb
+  gp <- promoters(g, upstream = 2000, downstream = 2000)
+  hits <- GenomicRanges::findOverlaps(gr, gp)
+  qh <- data.frame(peak = queryHits(hits), gene_id = as.character(gp$gene_id[subjectHits(hits)]))
+  qh$SYMBOL <- names(mtoeg)[match(qh$gene_id, mtoeg)]
+  qh <- qh[qh$SYMBOL %in% markers, ]
+  # one peak per gene: strongest absolute DESeq2 result if available, else highest count
+  qh$count <- rowSums(counts(dd, normalized = TRUE)[qh$peak, ])
+  qh <- qh[order(-qh$count), ]
+  sel <- qh[!duplicated(qh$SYMBOL), ]
+  cat(label, "genes with promoter peak:", nrow(sel), "/", length(markers), "\n")
+  mat <- log2(counts(dd, normalized = TRUE)[sel$peak, ] + 1)
+  mat <- t(scale(t(mat))); mat[is.na(mat)] <- 0
+  rownames(mat) <- sel$SYMBOL
+  mat
+}
+zA <- get_z("counts/dds_obj.rds", "ATAC")
+zH <- get_z("counts/ct_dds_obj.rds", "H3K4me3")
+
+# ---- (item 2) per-sample normalized counts CSV for all 18 markers ----
+# wide format: one row per gene x assay (strongest promoter peak), one column per sample
+get_counts_wide <- function(obj_path, assay_name) {
+  d <- readRDS(obj_path); dd <- d$dds; pk <- d$peaks
+  gp0 <- promoters(g, upstream = 2000, downstream = 2000)
+  h0 <- GenomicRanges::findOverlaps(
+    GenomicRanges::GRanges(pk$CHR, IRanges::IRanges(pk$START, pk$END)), gp0)
+  q0 <- data.frame(peak = queryHits(h0),
+                   SYMBOL = names(mtoeg)[match(as.character(gp0$gene_id[subjectHits(h0)]), mtoeg)])
+  q0 <- q0[q0$SYMBOL %in% markers, ]
+  q0 <- q0[order(-rowSums(counts(dd, normalized = TRUE)[q0$peak, ])), ]
+  q0 <- q0[!duplicated(q0$SYMBOL), ]
+  m0 <- counts(dd, normalized = TRUE)[q0$peak, , drop = FALSE]
+  rownames(m0) <- q0$SYMBOL
+  df <- as.data.frame(m0)
+  df$SYMBOL <- rownames(df); df$assay <- assay_name
+  df
+}
+cnt_w <- rbind(
+  get_counts_wide("counts/dds_obj.rds", "ATAC-seq"),
+  get_counts_wide("counts/ct_dds_obj.rds", "H3K4me3 CUT&Tag"))
+cnt_w <- merge(cnt_w, mk[, c("SYMBOL", "class")], by = "SYMBOL", all.x = TRUE)
+write.csv(cnt_w, file.path(outdir, "RNA_marker_promoter_counts.csv"), row.names = FALSE)
+cat("counts CSV saved:", nrow(cnt_w), "rows\n")
+
+samp_order <- c("N1","N3","N4","N6","Met1","Met3","Met4","Met6")
+zA <- zA[, samp_order]; zH <- zH[, samp_order]
+cls <- setNames(mk$class, mk$SYMBOL)
+# Combined matrix: ATAC block on top, H3K4me3 block below, NA-padded, rows aligned
+allg <- union(rownames(zA), rownames(zH))
+zA2 <- zA[intersect(allg, rownames(zA)), ]; zH2 <- zH[intersect(allg, rownames(zH)), ]
+padA <- matrix(NA, length(allg) - nrow(zA2), ncol(zA2), dimnames = list(setdiff(allg, rownames(zA2)), colnames(zA2)))
+padH <- matrix(NA, length(allg) - nrow(zH2), ncol(zH2), dimnames = list(setdiff(allg, rownames(zH2)), colnames(zH2)))
+zA2 <- rbind(zA2, padA)[allg, ]; zH2 <- rbind(zH2, padH)[allg, ]
+comb <- rbind(zA2, zH2)
+assay <- factor(rep(c("ATAC", "H3K4me3"), each = length(allg)), levels = c("ATAC", "H3K4me3"))
+row_cls <- cls[allg]
+row_cls[is.na(row_cls)] <- "none"
+col_cls <- c(sinusoidal_down = "#0279EE", capillarized_up = "#FF9400", inflammation_up = "#FD9BED", none = "grey80")
+row_cls_comb <- rep(row_cls, 2)
+ha_row <- rowAnnotation(class = row_cls_comb, col = list(class = col_cls), annotation_name_side = "top")
+col_fun <- colorRamp2(c(-2, 0, 2), c("#0279EE", "#FAF9F3", "#FF9400"))
+cs <- factor(c(rep("Normal", 4), rep("Met", 4)), levels = c("Normal", "Met"))
+
+ht <- Heatmap(comb, name = "z", col = col_fun, cluster_columns = FALSE,
+              cluster_rows = FALSE, row_split = assay,
+              row_title = c("ATAC-seq", "H3K4me3 CUT&Tag"),
+              column_split = cs, column_title = "Marker-gene promoter signals",
+              border = TRUE, na_col = "grey95",
+              right_annotation = ha_row,
+              row_title_gp = grid::gpar(fontsize = 11, fontface = "bold"),
+              row_names_gp = grid::gpar(fontsize = 8), show_row_names = TRUE)
+
+svg("/workspace/atac/qc/INT_marker_promoter_heatmap.svg", width = 9, height = 8)
+draw(ht, merge_legends = TRUE)
+dev.off()
+```
+
+## 8.Deeptool profile
+
+```{r}
+# 28_deeptools_style_heatmap.R
+# deepTools-style metagene heatmaps of chromatin-accessibility and H3K4me3
+# CHANGES (Met - Normal, delta log2 CPM per bin) across the whole gene:
+# 3 kb upstream of the TSS (5'UTR start) -> gene body (TSS to 3'UTR/gene end,
+# scaled) -> 3 kb downstream. Rows = genes, grouped by RNA direction
+# (top 500 RNA-up / top 500 RNA-down; nominal p<0.05, |log2FC|>1, ranked by p;
+# no gene passes FDR<0.05 in this cohort, min FDR = 0.071).
+# Output: RNA_crosscheck/INT_deeptools_style_*.{svg,csv}
+
+suppressPackageStartupMessages({
+  library(GenomicRanges); library(Rsamtools); library(IRanges)
+  library(TxDb.Mmusculus.UCSC.mm10.knownGene); library(ComplexHeatmap); library(circlize)
+  library(grid); library(ggplot2)
+})
+setwd("/workspace/atac")
+outdir <- "/mnt/results/atac_vessel_analysis/RNA_crosscheck"
+qcdir  <- "/workspace/atac/qc"
+FLANK <- 3000L; N_FLANK_BIN <- 30L; N_BODY_BIN <- 100L   # 100 bp flank bins
+N_BIN <- 2 * N_FLANK_BIN + N_BODY_BIN                     # 160 columns
+
+## ---- 1. RNA gene sets ----------------------------------------------------
+de <- read.csv(file.path(outdir, "RNA_EC_DE_all_genes.csv"))
+up_cand <- de[de$RNA_p < 0.05 & de$RNA_log2FC > 1, ]
+dn_cand <- de[de$RNA_p < 0.05 & de$RNA_log2FC < -1, ]
+up <- up_cand[order(up_cand$RNA_p), "SYMBOL"][1:500]
+dn <- dn_cand[order(dn_cand$RNA_p), "SYMBOL"][1:500]
+cat("RNA-up genes:", length(up), " RNA-down genes:", length(dn), "\n")
+
+## ---- 2. Gene regions: TSS-3kb .. gene-end+3kb ----------------------------
+txdb <- TxDb.Mmusculus.UCSC.mm10.knownGene
+g <- genes(txdb)
+sym <- AnnotationDbi::select(org.Mm.eg.db::org.Mm.eg.db, keys = as.character(g$gene_id),
+                             keytype = "ENTREZID", columns = "SYMBOL")
+sym <- sym[!duplicated(sym$ENTREZID), ]
+g$symbol <- sym$SYMBOL[match(as.character(g$gene_id), sym$ENTREZID)]
+g <- g[!is.na(g$symbol) & as.character(seqnames(g)) %in% paste0("chr", c(1:19, "X", "Y"))]
+# keep longest gene body per symbol
+gdf <- as.data.frame(g); gdf$width_ <- width(g)
+gdf <- gdf[order(gdf$symbol, -gdf$width_), ]; gdf <- gdf[!duplicated(gdf$symbol), ]
+g <- GRanges(gdf$seqnames, IRanges(gdf$start, gdf$end), strand = gdf$strand,
+             gene_id = gdf$gene_id, symbol = gdf$symbol)
+
+mk_region <- function(gr) {
+  tss <- ifelse(as.character(strand(gr)) == "-", end(gr), start(gr))
+  gend <- ifelse(as.character(strand(gr)) == "-", start(gr), end(gr))
+  GRanges(seqnames(gr), IRanges(pmax(1, pmin(tss, gend) - FLANK),
+                                pmax(tss, gend) + FLANK),
+          strand = strand(gr), symbol = gr$symbol, tss = tss, gend = gend)
+}
+sel <- g[g$symbol %in% c(up, dn)]
+reg <- mk_region(sel)
+reg <- reg[width(reg) > 2 * FLANK + 10]   # need a gene body
+cat("genes with usable regions:", length(reg),
+    " (up", sum(reg$symbol %in% up), "/ down", sum(reg$symbol %in% dn),
+    "; unmapped candidates are mostly uncharacterized Gm loci absent from TxDb)\n")
+
+## ---- 3. Bins: 30x100bp upstream | 100 scaled body | 30x100bp downstream ---
+mk_bins <- function(i) {
+  r <- reg[i]; plus <- as.character(strand(r)) != "-"
+  tss <- r$tss; gend <- r$gend
+  # oriented (5'->3') coordinate space: o(x) = x on + strand, -x on - strand
+  o <- function(v) if (plus) v else -v
+  inv <- function(a, b) if (plus) c(a, b) else c(-b, -a)  # oriented [a,b] -> genomic start/end
+  tss_o <- o(tss); gend_o <- o(gend)   # tss_o < gend_o always
+  ab <- rbind(
+    t(sapply(0:(N_FLANK_BIN - 1), function(k)
+      inv(tss_o - FLANK + k * (FLANK / N_FLANK_BIN),
+          tss_o - FLANK + (k + 1) * (FLANK / N_FLANK_BIN)))),
+    t(sapply(1:N_BODY_BIN, function(k)
+      inv(seq(tss_o, gend_o, length.out = N_BODY_BIN + 1)[k],
+          seq(tss_o, gend_o, length.out = N_BODY_BIN + 1)[k + 1]))),
+    t(sapply(0:(N_FLANK_BIN - 1), function(k)
+      inv(gend_o + k * (FLANK / N_FLANK_BIN),
+          gend_o + (k + 1) * (FLANK / N_FLANK_BIN)))))
+  colnames(ab) <- c("s", "e")
+  ab <- as.data.frame(ab); ab$s <- pmax(1, ab$s)
+  ab$e[ab$e < ab$s] <- ab$s[ab$e < ab$s]   # guard zero-width body bins
+  data.frame(chr = as.character(seqnames(r)), start = ab$s, end = ab$e,
+             gene_i = i, bin_i = 1:N_BIN,
+             part = rep(c("upstream", "body", "downstream"),
+                        times = c(N_FLANK_BIN, N_BODY_BIN, N_FLANK_BIN)),
+             stringsAsFactors = FALSE)
+}
+bdf <- do.call(rbind, lapply(seq_len(length(reg)), mk_bins))
+bins <- GRanges(bdf$chr, IRanges(bdf$start, bdf$end),
+                gene_i = bdf$gene_i, bin_i = bdf$bin_i, part = bdf$part)
+cat("total bins:", length(bins), "\n")
+
+## ---- 4. Per-BAM bin counts (read starts in restricted regions) -----------
+bams <- c(sprintf("/mnt/user-uploads/ATAC/ATAC_%s_clean.bam",
+                  c("N1","N3","N4","N6","Met1","Met3","Met4","Met6")),
+          sprintf("/mnt/user-uploads/H3K4me3/CUT_%s_clean.bam",
+                  c("N1","N3","N4","N6","Met1","Met3","Met4","Met6")))
+samp <- c("ATAC_N1","ATAC_N3","ATAC_N4","ATAC_N6","ATAC_Met1","ATAC_Met3","ATAC_Met4","ATAC_Met6",
+          "H3K_N1","H3K_N3","H3K_N4","H3K_N6","H3K_Met1","H3K_Met3","H3K_Met4","H3K_Met6")
+
+# per-chromosome bin spans for restricted scanning
+chroms <- unique(as.character(seqnames(bins)))
+count_bam <- function(bf) {
+  stats <- idxstatsBam(bf); libsize <- sum(stats$mapped)
+  cnt <- matrix(0L, nrow = length(reg), ncol = N_BIN)
+  for (ch in chroms) {
+    b_ch <- bins[as.character(seqnames(bins)) == ch]
+    span <- range(b_ch)
+    sbp <- ScanBamParam(which = span,
+                        flag = scanBamFlag(isUnmappedQuery = FALSE),
+                        what = "pos")
+    x <- scanBam(bf, param = sbp)[[1]]$pos
+    if (!length(x)) next
+    # per-base coverage of read starts; sum over each bin (handles overlapping bins)
+    cov <- coverage(IRanges(x, width = 1))
+    if (max(end(b_ch)) > length(cov))
+      cov <- c(cov, Rle(0L, max(end(b_ch)) - length(cov)))
+    cnts <- viewSums(Views(cov, start = start(b_ch), end = end(b_ch)))
+    i <- cbind(b_ch$gene_i, b_ch$bin_i)
+    cnt[i] <- cnt[i] + as.integer(cnts)
+  }
+  list(cnt = cnt, libsize = libsize)
+}
+
+res_cache <- "counts/bin_counts_28.rds"
+if (file.exists(res_cache)) {
+  cat("loading cached bin counts...\n"); res <- readRDS(res_cache)
+} else {
+  res <- lapply(seq_along(bams), function(i) {
+    cat("processing", samp[i], "...\n"); flush.console()
+    count_bam(bams[i])
+  })
+  names(res) <- samp
+  saveRDS(res, res_cache)
+}
+lib <- sapply(res, `[[`, "libsize")
+cat("library sizes (mapped reads):", paste(lib, collapse = ", "), "\n")
+
+## ---- 5. delta log2 CPM (Met - Normal) per gene per bin -------------------
+# gene x bin x sample array of log2 CPM
+lcpm <- sapply(samp, function(s) log2(res[[s]]$cnt / res[[s]]$libsize * 1e6 + 1),
+               simplify = "array")
+dA <- rowMeans(lcpm[, , grep("^ATAC_Met", samp)], dims = 2) -
+      rowMeans(lcpm[, , grep("^ATAC_N", samp)], dims = 2)
+dH <- rowMeans(lcpm[, , grep("^H3K_Met", samp)], dims = 2) -
+      rowMeans(lcpm[, , grep("^H3K_N", samp)], dims = 2)
+rownames(dA) <- rownames(dH) <- reg$symbol
+# flip minus-strand genes to 5'->3' orientation (bins were built in oriented space)
+minus <- as.character(strand(reg)) == "-"
+cat("minus-strand genes flipped:", sum(minus), "of", length(reg), "\n")
+if (any(minus)) {
+  dA[minus, ] <- dA[minus, N_BIN:1]
+  dH[minus, ] <- dH[minus, N_BIN:1]
+}
+
+gi_up <- match(up, reg$symbol); gi_up <- gi_up[!is.na(gi_up)]
+gi_dn <- match(dn, reg$symbol); gi_dn <- gi_dn[!is.na(gi_dn)]
+ord <- c(gi_up, gi_dn)
+rowgrp <- factor(rep(c("RNA-upregulated", "RNA-downregulated"),
+                     c(length(gi_up), length(gi_dn))),
+                 levels = c("RNA-upregulated", "RNA-downregulated"))
+cat("rows in heatmap:", length(ord), " (up", length(gi_up), "/ down", length(gi_dn), ")\n")
+
+## ---- 6. deepTools-style heatmaps ----------------------------------------
+col_fun <- colorRamp2(seq(-1, 1, length.out = 11), rev(RColorBrewer::brewer.pal(11, "RdYlBu")))
+lab <- c("-3 kb", rep("", N_FLANK_BIN - 1), "TSS", rep("", N_BODY_BIN - 2),
+         "3'end", rep("", N_FLANK_BIN - 1), "+3 kb")
+csp <- rep(c("3 kb upstream", "gene body (scaled)", "3 kb downstream"),
+           times = c(N_FLANK_BIN, N_BODY_BIN, N_FLANK_BIN))
+ha_col <- HeatmapAnnotation(df = data.frame(part = csp), show_legend = FALSE,
+                            col = list(part = c("3 kb upstream" = "#ECE9E2",
+                                                "gene body (scaled)" = "#E9ED4C",
+                                                "3 kb downstream" = "#FAF9F3")),
+                            annotation_name_side = "left")
+
+draw_hm <- function(mat, title, fname) {
+  ht <- Heatmap(mat[ord, ], name = "d log2 CPM\n(Met - Normal)", col = col_fun,
+                cluster_columns = FALSE, cluster_rows = FALSE,
+                show_row_names = FALSE, top_annotation = ha_col,
+                column_labels = lab, column_title = title,
+                column_title_gp = gpar(fontsize = 12, fontface = "bold"),
+                row_split = rowgrp, row_title = c("RNA-upregulated", "RNA-downregulated"),
+                row_title_gp = gpar(fontsize = 11, fontface = "bold"),
+                border = TRUE, use_raster = TRUE, raster_quality = 4)
+  svg(file.path(qcdir, fname), width = 9, height = 7.5); draw(ht); dev.off()
+}
+draw_hm(dA, "ATAC-seq accessibility change (Met - Normal)", "INT_deeptools_style_ATAC_RNAgenes.svg")
+draw_hm(dH, "H3K4me3 CUT&Tag change (Met - Normal)", "INT_deeptools_style_H3K4me3_RNAgenes.svg")
+
+## ---- 7. mean profile curves + standard error bands ------------------------
+# per-bin Wilcoxon p (RNA-up vs RNA-down) kept in the CSV for reference
+wilcox_pbin <- function(mat) {
+  sapply(1:N_BIN, function(b)
+    suppressWarnings(wilcox.test(mat[gi_up, b], mat[gi_dn, b])$p.value))
+}
+pA <- wilcox_pbin(dA); pH <- wilcox_pbin(dH)
+se <- function(mat, idx) colMeans(mat[idx, ]) * 0 +
+  apply(mat[idx, ], 2, function(v) sd(v, na.rm = TRUE) / sqrt(length(v)))
+prof <- data.frame(bin = 1:N_BIN,
+                   ATAC_up = colMeans(dA[gi_up, ]), ATAC_up_se = se(dA, gi_up),
+                   ATAC_dn = colMeans(dA[gi_dn, ]), ATAC_dn_se = se(dA, gi_dn),
+                   H3K_up = colMeans(dH[gi_up, ]), H3K_up_se = se(dH, gi_up),
+                   H3K_dn = colMeans(dH[gi_dn, ]), H3K_dn_se = se(dH, gi_dn),
+                   ATAC_p = pA, H3K_p = pH)
+write.csv(prof, file.path(qcdir, "INT_deeptools_style_mean_profiles.csv"), row.names = FALSE)
+pl <- rbind(
+  setNames(cbind(prof[, c("bin", "ATAC_up", "ATAC_up_se", "ATAC_p")],
+                 data.frame(assay = "ATAC-seq", grp = "RNA-up")),
+           c("bin", "delta", "se", "pval", "assay", "grp")),
+  setNames(cbind(prof[, c("bin", "H3K_up", "H3K_up_se", "H3K_p")],
+                 data.frame(assay = "H3K4me3 CUT&Tag", grp = "RNA-up")),
+           c("bin", "delta", "se", "pval", "assay", "grp")),
+  setNames(cbind(prof[, c("bin", "ATAC_dn", "ATAC_dn_se", "ATAC_p")],
+                 data.frame(assay = "ATAC-seq", grp = "RNA-down")),
+           c("bin", "delta", "se", "pval", "assay", "grp")),
+  setNames(cbind(prof[, c("bin", "H3K_dn", "H3K_dn_se", "H3K_p")],
+                 data.frame(assay = "H3K4me3 CUT&Tag", grp = "RNA-down")),
+           c("bin", "delta", "se", "pval", "assay", "grp")))
+pl$assay <- factor(pl$assay, levels = c("ATAC-seq", "H3K4me3 CUT&Tag"))
+pl$grp <- factor(pl$grp, levels = c("RNA-up", "RNA-down"))
+p <- ggplot(pl, aes(bin, delta, color = grp, fill = grp)) +
+  geom_hline(yintercept = 0, color = "grey70") +
+  geom_ribbon(aes(ymin = delta - se, ymax = delta + se, color = NULL),
+              alpha = 0.18, linewidth = 0) +
+  geom_line(linewidth = 0.8) + facet_wrap(~assay, ncol = 1, scales = "fixed") +
+  scale_color_manual(values = c("RNA-up" = "#FF9400", "RNA-down" = "#0279EE"), name = NULL) +
+  scale_fill_manual(values = c("RNA-up" = "#FF9400", "RNA-down" = "#0279EE"), name = NULL) +
+  scale_x_continuous(breaks = c(1, N_FLANK_BIN, N_FLANK_BIN + N_BODY_BIN / 2,
+                                N_FLANK_BIN + N_BODY_BIN, N_BIN),
+                     labels = c("-3 kb", "TSS", "body", "3'end", "+3 kb")) +
+  labs(x = NULL, y = "Mean d log2 CPM (Met - Normal)",
+       subtitle = "Shaded band: mean +/- SEM across genes") +
+  theme_classic(base_family = "Liberation Sans") + theme(legend.position = "top")
+ggsave(file.path(qcdir, "INT_deeptools_style_profiles.svg"), p, width = 7, height = 5.4)
+```
+

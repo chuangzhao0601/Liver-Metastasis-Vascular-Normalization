@@ -1,0 +1,70 @@
+---
+title: "ESM1"
+author: "Lin Tian"
+date: "2025-03-10"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+## Set working directory
+
+```{r}
+setwd("~/EC/TCGA_ESM1_immune")
+TCGA_RNA <- read.delim("EBPlusPlusAdjustPANCAN_IlluminaHiSeq_RNASeqV2.geneExp.tsv")
+
+TCGA_RNA <- TCGA_RNA[sub("\\|.+", "", TCGA_RNA$gene_id) != "?", ]
+
+gene_symbol <- sub("\\|.+", "", TCGA_RNA$gene_id)
+which(duplicated(gene_symbol))
+
+TCGA_RNA <- TCGA_RNA[-16273, ]
+
+rownames(TCGA_RNA) <- sub("\\|.+", "", TCGA_RNA$gene_id)
+TCGA_RNA$gene_id <- NULL
+TCGA_RNA <- data.matrix(TCGA_RNA)
+
+TCGA_Immune <- read.delim("TCGA.Kallisto.fullIDs.cibersort.relative.tsv")
+common_sample_id <- intersect(TCGA_Immune$SampleID, colnames(TCGA_RNA))
+TCGA_RNA <- TCGA_RNA[, common_sample_id]
+TCGA_Immune <- TCGA_Immune[match(colnames(TCGA_RNA), TCGA_Immune$SampleID), ]
+all.equal(TCGA_Immune$SampleID, colnames(TCGA_RNA))
+
+save(TCGA_RNA, TCGA_Immune, file="TCGA_RNA_Immune.RData")
+```
+
+## Load data and analysis
+
+```{r}
+load("TCGA_RNA_Immune.RData")
+TCGA_Immune$CancerType <- ifelse(TCGA_Immune$CancerType %in% c("COAD", "READ"), "COADREAD", TCGA_Immune$CancerType)
+cancer_type <- c("KIRP", "PRAD", "ACC", "ESCA", "COADREAD", "LIHC", "BRCA", "LGG")
+TCGA_Immune <- subset(TCGA_Immune, TCGA_Immune$CancerType %in% cancer_type)
+immune_type <- colnames(TCGA_Immune)[3:24][grep("^B|^T", colnames(TCGA_Immune)[3:24])]
+immune_type <- immune_type[1:6]
+
+ESM1_immune_cor <- matrix(NA, nrow=length(cancer_type), ncol=length(immune_type))
+rownames(ESM1_immune_cor) <- cancer_type
+colnames(ESM1_immune_cor) <- immune_type
+
+for(i in rownames(ESM1_immune_cor)) {
+  temp <- subset(TCGA_Immune, TCGA_Immune$CancerType %in% i)
+  for(j in colnames(ESM1_immune_cor)) {
+    ESM1_immune_cor[i, j] <- cor(log2(TCGA_RNA["ESM1", temp$SampleID]+1), temp[, j])
+  }
+}
+
+pheatmap::pheatmap(ESM1_immune_cor, cluster_rows = FALSE, cluster_cols = FALSE)
+
+ESM1_immune_p <- matrix(NA, nrow=length(cancer_type), ncol=length(immune_type))
+rownames(ESM1_immune_cor) <- cancer_type
+colnames(ESM1_immune_cor) <- immune_type
+
+for(i in rownames(ESM1_immune_cor)) {
+  temp <- subset(TCGA_Immune, TCGA_Immune$CancerType %in% i)
+  for(j in colnames(ESM1_immune_cor)) {
+    ESM1_immune_cor[i, j] <- cor.test(log2(TCGA_RNA["ESM1", temp$SampleID]+1), temp[, j])$p.value
+  }
+}
+```
+

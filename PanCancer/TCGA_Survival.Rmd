@@ -1,0 +1,52 @@
+---
+title: "cBioportal_TCGA"
+author: "Lin Tian"
+date: "2025-03-13"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+## 
+
+```{r}
+library(cBioPortalData)
+library(dplyr)
+library(survival)
+cbio <- cBioPortal(hostname = "www.cbioportal.org", protocol = "https", api. = "/api/v2/api-docs")
+getStudies(cbio)
+
+head(getStudies(cbio)[["studyId"]])
+getStudies(cbio)[["studyId"]][grep("tcga", getStudies(cbio)[["studyId"]])]
+
+samps <- sampleLists(cbio, "lihc_tcga_pan_can_atlas_2018")
+clinical <- as.data.frame(clinicalData(cbio, "lihc_tcga_pan_can_atlas_2018"))
+clinical <- clinical[, c("patientId", "sampleId", colnames(clinical)[grep("STATUS", colnames(clinical))], colnames(clinical)[grep("MONTH", colnames(clinical))])]
+
+# View(molecularProfiles(api = cbio, studyId = "lihc_tcga_pan_can_atlas_2018"))
+
+ESM1.exp <- as.data.frame(getDataByGenes(api=cbio, studyId="lihc_tcga_pan_can_atlas_2018", genes="ESM1", by="hugoGeneSymbol", molecularProfileIds = "lihc_tcga_pan_can_atlas_2018_rna_seq_v2_mrna_median_all_sample_Zscores"))
+match(clinical$patientId, ESM1.exp$lihc_tcga_pan_can_atlas_2018_rna_seq_v2_mrna_median_all_sample_Zscores.patientId)
+
+clinical$ESM1 <- ESM1.exp$lihc_tcga_pan_can_atlas_2018_rna_seq_v2_mrna_median_all_sample_Zscores.value[match(clinical$patientId, ESM1.exp$lihc_tcga_pan_can_atlas_2018_rna_seq_v2_mrna_median_all_sample_Zscores.patientId)]
+clinical$ESM1.g <- ifelse(clinical$ESM1 < median(clinical$ESM1), "Low", "High")
+clinical$ESM1.g <- factor(clinical$ESM1.g, levels=c("Low", "High"))
+
+clinical$OS_STATUS <- as.numeric(sub(":.+", "", clinical$OS_STATUS))
+clinical$OS_MONTHS <- as.numeric(clinical$OS_MONTHS)
+
+clinical$DSS_STATUS <- as.numeric(sub(":.+", "", clinical$DSS_STATUS))
+clinical$DSS_MONTHS <- as.numeric(clinical$DSS_MONTHS)
+
+clinical$DFS_STATUS <- as.numeric(sub(":.+", "", clinical$DFS_STATUS))
+clinical$DFS_MONTHS <- as.numeric(clinical$DFS_MONTHS)
+
+clinical$PFS_STATUS <- as.numeric(sub(":.+", "", clinical$PFS_STATUS))
+clinical$PFS_MONTHS <- as.numeric(clinical$PFS_MONTHS)
+
+coxph(Surv(OS_MONTHS, OS_STATUS) ~ ESM1, data = clinical) %>% summary()
+coxph(Surv(DSS_MONTHS, DSS_STATUS) ~ ESM1, data = clinical) %>% summary()
+coxph(Surv(DFS_MONTHS, DFS_STATUS) ~ ESM1, data = clinical) %>% summary()
+coxph(Surv(PFS_MONTHS, PFS_STATUS) ~ ESM1, data = clinical) %>% summary()
+```
+
